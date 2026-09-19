@@ -1,0 +1,40 @@
+# ===== Gradle =====
+.gradle/
+build/
+# Keep the wrapper jar (required by the Gradle wrapper)
+!gradle/wrapper/gradle-wrapper.jar
+
+# ===== Kotlin =====
+.kotlin/
+
+# ===== Local config & secrets (never commit) =====
+local.properties
+keystore.properties
+*.jks
+*.keystore
+.env
+# Firebase config: ignored here; restore it from CI secrets when needed
+google-services.json
+
+# ===== Build outputs =====
+*.apk
+*.aab
+*.ap_
+*.dex
+*.hprof
+
+# ===== Native (NDK / CMake) =====
+.externalNativeBuild/
+.cxx/
+
+# ===== Android Studio / IntelliJ =====
+.idea/
+*.iml
+captures/
+
+# ===== Logs =====
+*.log
+
+# ===== OS files =====
+.DS_Store
+Thumbs.db
