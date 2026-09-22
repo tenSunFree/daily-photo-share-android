@@ -1,0 +1,12 @@
+<resources>
+    <string name="today_photo_count">今日拍攝 %1$d 張</string>
+    <string name="today_no_photos">還沒有拍攝任何照片</string>
+    <string name="today_last_captured">最後拍攝:%1$s</string>
+    <string name="today_last_share_line">最近送往 LINE:%1$s · %2$d 張</string>
+    <string name="today_last_share_other">最近分享:%1$s · %2$d 張</string>
+    <string name="today_no_share">尚未分享過照片</string>
+    <string name="today_action_capture">拍照</string>
+    <string name="today_action_share_line">選圖傳 LINE</string>
+    <string name="today_error_load">無法載入資料</string>
+    <string name="today_action_retry">重試</string>
+</resources>

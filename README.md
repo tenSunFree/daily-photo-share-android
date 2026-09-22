@@ -50,18 +50,20 @@ Screenshots are added once the capture → organize → share flow is implemente
 - [x] Gradle daemon JVM toolchain pinned to JDK 21 via `gradle/gradle-daemon-jvm.properties`
 - [x] Local unit test and instrumented test scaffolding (JUnit 4, AndroidX Test, Espresso, Compose UI test)
 - [x] Android-focused `.gitignore` (Gradle, Kotlin, IDE, keystores, local config)
+- [x] Navigation shell: single activity, type-safe routes, bottom navigation (Today | Camera | Gallery)
+- [x] Today screen as an MVI / UDF vertical slice (Intent, immutable UiState, Effect, reducer, ViewModel) on sample data, covered by reducer, ViewModel and use case unit tests
 
 ### Planned
 
-- [ ] Navigation shell and the MVI / UDF vertical slice for the Today screen (see [Concepts](#concepts))
+- [ ] Today screen backed by real MediaStore data
 - [ ] Camera capture with CameraX
 - [ ] Automatic date-based organization through MediaStore
 - [ ] Full device gallery browsing with Paging 3
 - [ ] Cross-source multi-selection
 - [ ] LINE sharing
 - [ ] Jetpack Glance home screen widgets
-- [ ] Remaining modules (`:core:domain`, `:core:data`, `:core:media`, `:core:database`, feature modules), added together with the features that need them
-- [ ] Automated testing beyond the domain layer (reducer, ViewModel, Compose UI, instrumented)
+- [ ] Remaining modules (`:core:data`, `:core:media`, `:core:database`, further feature modules), added together with the features that need them
+- [ ] Automated testing beyond the current scope (Compose UI, instrumented)
 - [ ] CI/CD with GitHub Actions
 - [ ] Observability (crash reporting and analytics)
 
@@ -138,10 +140,16 @@ Screenshots are added once the capture → organize → share flow is implemente
   Activity integration, lifecycle-aware components, and Kotlin extensions
 - Hilt + KSP  
   Dependency injection (Hilt `2.60.1`, KSP `2.3.9`)
+- Navigation Compose (type-safe routes) + kotlinx.serialization  
+  Single-activity navigation (Navigation Compose `2.10.1`)
+- Lifecycle ViewModel + `androidx.hilt` ViewModel integration  
+  State holders with `StateFlow`, lifecycle-aware collection
+- Kotlin Coroutines / Flow  
+  Asynchronous data streams in the domain layer
 - Android Gradle Plugin + Gradle Kotlin DSL  
   Build system (AGP `9.2.1`, Gradle `9.4.1`, version catalog, configuration cache, build cache)
 - Multi-module Gradle build  
-  AGP 9 built-in Kotlin for Android modules, `kotlin-jvm` for the pure JVM `:core:model`
+  AGP 9 built-in Kotlin for Android modules, `kotlin-jvm` for the pure JVM `:core:model` and `:core:domain`
 - JUnit 4 / AndroidX Test / Espresso / Compose UI Test  
   Testing dependencies wired into the project for local and instrumented tests
 
@@ -153,8 +161,6 @@ Screenshots are added once the capture → organize → share flow is implemente
   Saving and organizing photos by date, and reading the full device gallery
 - Paging 3  
   Paginated gallery loading
-- Navigation Compose (type-safe routes)  
-  Single-activity navigation
 - Room / DataStore  
   Share history and preferences
 - Jetpack Glance  
@@ -216,15 +222,13 @@ The Gradle wrapper JAR (`gradle/wrapper/gradle-wrapper.jar`) is kept in the repo
 
 ```text
 daily-photo-share-android
-├─ app                                   # Application, Activity, Hilt entry point
-│  └─ src/main/java/com/sun/daily_photo_share_android
-│     ├─ DailyPhotoShareApp.kt           # @HiltAndroidApp
-│     └─ MainActivity.kt
+├─ app                                   # Application, Activity, navigation shell, Hilt wiring
 ├─ core
 │  ├─ model                              # Pure Kotlin/JVM: domain models and rules (no Android)
-│  │  └─ src/{main,test}/kotlin/.../core/model
-│  └─ designsystem                       # Android library: tokens, DailyTheme, components
-│     └─ src/main/kotlin/.../core/designsystem
+│  ├─ domain                             # Pure Kotlin/JVM: repository interfaces and use cases
+│  └─ designsystem                       # Android library: tokens, theme, icons, components
+├─ feature
+│  └─ today                              # Today screen: MVI contract, reducer, ViewModel, UI
 ├─ gradle
 │  ├─ libs.versions.toml                 # Version catalog
 │  ├─ gradle-daemon-jvm.properties       # Daemon JDK toolchain (JDK 21)
@@ -238,11 +242,12 @@ daily-photo-share-android
 Module dependency direction:
 
 ```text
-:app ──► :core:designsystem
- └─────► :core:model
+:app ──► :feature:today ──► :core:domain ──► :core:model
+ │              └──────────► :core:designsystem
+ └─► :core:domain, :core:model, :core:designsystem
 ```
 
-`:core:model` stays free of Android and Compose; `:core:designsystem` does not depend on `:core:model`.
+`:core:model` and `:core:domain` stay free of Android and Compose; `:core:designsystem` does not depend on the domain modules.
 
 ---
 
@@ -251,11 +256,15 @@ Module dependency direction:
 - **minSdk 29 (Android 10+).** Photos are written to `Pictures/DailyShare/<date>/` through MediaStore `RELATIVE_PATH` (API 29). Supporting Android 7-9 would require a separate legacy storage path, which is not worth maintaining for this project.
 - **Media identity is a content URI string (`MediaUri`).** Temporary URIs from the system Photo Picker have no MediaStore `_ID`, but must still be selectable and shareable.
 - **`PhotoSelection` is an immutable ordered list.** List order is the share order and the on-screen badge number, so every operation is a pure function of the previous state (easy to reducer-test).
-- **The domain model is Android-free.** `:core:model` uses only `java.time` and Kotlin types, so its tests run on the plain JVM in seconds. Conversion to `android.net.Uri` happens at the sharing boundary.
+- **The domain model is Android-free.** `:core:model` and `:core:domain` use only `java.time`, Kotlin types and coroutines, so their tests run on the plain JVM in seconds. Conversion to `android.net.Uri` happens at the sharing boundary.
 - **Modules are created on demand.** No empty placeholder modules; each module appears with its first real implementation.
 - **No shared MVI framework up front.** Intent / State / Effect / Reducer are implemented directly in one feature; common abstractions are extracted only after several features show real duplication.
 - **Retrofit / OkHttp are deferred.** The app is offline-first; a remote layer is added only when cloud features are.
 - **Share status is `HANDED_OFF`, never "success".** The app can only prove it handed the images to another app, not that the message was sent or received.
+- **`:core:domain` has no DI annotations.** Use cases are plain classes constructed in a Hilt module in `:app`, so the domain layer does not know which DI framework is used.
+- **Screens are split into Route and Screen.** `XRoute` connects the ViewModel (collect state, forward intents, turn effects into navigation); `XScreen` is stateless (UiState in, Intent out).
+- **Reload on every resume.** The Today screen re-reads its data whenever it resumes, so it also reflects a changed calendar date without a background timer.
+- **Icons go through the design system.** Features use `DailyIcons` and never import an icon library directly, so the icon source can change in one module.
 
 ---
 

@@ -26,4 +26,6 @@ rootProject.name = "daily-photo-share-android"
 include(":app")
 include(":core:model")
 include(":core:designsystem")
+include(":core:domain")
+include(":feature:today")
  
