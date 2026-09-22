@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     // The Compose compiler plugin is independent of the built-in Kotlin support and still requires declaration.
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.hilt) apply false
 }
