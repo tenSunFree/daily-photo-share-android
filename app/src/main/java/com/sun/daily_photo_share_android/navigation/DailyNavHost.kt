@@ -5,7 +5,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.toRoute
+import com.sun.daily_photo_share_android.feature.gallery.GalleryDestination
+import com.sun.daily_photo_share_android.feature.gallery.galleryScreen
 import com.sun.daily_photo_share_android.feature.today.TodayDestination
 import com.sun.daily_photo_share_android.feature.today.todayScreen
 
@@ -30,13 +31,7 @@ internal fun DailyNavHost(
             },
         )
 
-        composable<GalleryDestination> { entry ->
-            val destination = entry.toRoute<GalleryDestination>()
-            PlaceholderScreen(
-                title = "Gallery",
-                detail = "selectionMode = ${destination.selectionMode}",
-            )
-        }
+        galleryScreen()
 
         composable<CameraDestination> {
             PlaceholderScreen(title = "Camera")

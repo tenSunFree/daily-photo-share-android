@@ -10,7 +10,7 @@ import com.sun.daily_photo_share_android.feature.today.TodayDestination
 import com.sun.daily_photo_share_android.navigation.CameraDestination
 import com.sun.daily_photo_share_android.navigation.DailyBottomBar
 import com.sun.daily_photo_share_android.navigation.DailyNavHost
-import com.sun.daily_photo_share_android.navigation.GalleryDestination
+import com.sun.daily_photo_share_android.feature.gallery.GalleryDestination
 import com.sun.daily_photo_share_android.navigation.isOn
 import com.sun.daily_photo_share_android.navigation.navigateToTopLevel
 
