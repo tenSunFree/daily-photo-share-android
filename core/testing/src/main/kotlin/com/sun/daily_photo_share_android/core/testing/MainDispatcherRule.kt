@@ -1,4 +1,4 @@
-package com.sun.daily_photo_share_android.feature.today
+package com.sun.daily_photo_share_android.core.testing
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

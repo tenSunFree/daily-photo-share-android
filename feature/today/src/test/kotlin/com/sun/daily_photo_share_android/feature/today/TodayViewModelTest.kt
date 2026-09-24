@@ -18,6 +18,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import com.sun.daily_photo_share_android.core.testing.MainDispatcherRule
 
 class TodayViewModelTest {
 
@@ -43,7 +44,6 @@ class TodayViewModelTest {
     fun initialState_isLoading_andNothingIsLoadedBeforeAnIntent() {
         var calls = 0
         val vm = viewModel { calls++; flowOf(summary) }
-
         assertTrue(vm.state.value.isLoading)
         assertNull(vm.state.value.summary)
         assertEquals(0, calls)
@@ -52,9 +52,7 @@ class TodayViewModelTest {
     @Test
     fun refresh_loadsSummary() {
         val vm = viewModel { flowOf(summary) }
-
         vm.onIntent(TodayIntent.Refresh)
-
         assertFalse(vm.state.value.isLoading)
         assertEquals(summary, vm.state.value.summary)
         assertNull(vm.state.value.error)
@@ -63,9 +61,7 @@ class TodayViewModelTest {
     @Test
     fun refresh_failure_reportsError() {
         val vm = viewModel { flow { throw IOException("boom") } }
-
         vm.onIntent(TodayIntent.Refresh)
-
         assertFalse(vm.state.value.isLoading)
         assertNull(vm.state.value.summary)
         assertEquals(TodayError.LoadFailed, vm.state.value.error)
@@ -77,10 +73,8 @@ class TodayViewModelTest {
         val vm = viewModel {
             if (call++ == 0) flowOf(summary) else flow { throw IOException("boom") }
         }
-
         vm.onIntent(TodayIntent.Refresh)
         vm.onIntent(TodayIntent.Refresh)
-
         assertEquals(summary, vm.state.value.summary)
         assertEquals(TodayError.LoadFailed, vm.state.value.error)
         assertFalse(vm.state.value.isLoading)
@@ -92,10 +86,8 @@ class TodayViewModelTest {
         val vm = viewModel {
             if (call++ == 0) flow { throw IOException("boom") } else flowOf(summary)
         }
-
         vm.onIntent(TodayIntent.Refresh)
         vm.onIntent(TodayIntent.Refresh)
-
         assertEquals(summary, vm.state.value.summary)
         assertNull(vm.state.value.error)
     }
@@ -105,11 +97,9 @@ class TodayViewModelTest {
         val first = MutableSharedFlow<TodaySummary>()
         var call = 0
         val vm = viewModel { if (call++ == 0) first else flowOf(newerSummary) }
-
         vm.onIntent(TodayIntent.Refresh)
         vm.onIntent(TodayIntent.Refresh)
         first.emit(summary)
-
         assertEquals(newerSummary, vm.state.value.summary)
     }
 
@@ -121,11 +111,9 @@ class TodayViewModelTest {
             requested += it
             flowOf(summary.copy(date = it))
         }
-
         vm.onIntent(TodayIntent.Refresh)
         today = LocalDate.of(2026, 9, 20)
         vm.onIntent(TodayIntent.Refresh)
-
         assertEquals(
             listOf(LocalDate.of(2026, 9, 19), LocalDate.of(2026, 9, 20)),
             requested,
@@ -136,18 +124,14 @@ class TodayViewModelTest {
     @Test
     fun captureClicked_emitsNavigateToCamera() = runTest {
         val vm = viewModel { flowOf(summary) }
-
         vm.onIntent(TodayIntent.CaptureClicked)
-
         assertEquals(TodayEffect.NavigateToCamera, vm.effects.first())
     }
 
     @Test
     fun selectPhotosForLineClicked_emitsNavigateToGallerySelection() = runTest {
         val vm = viewModel { flowOf(summary) }
-
         vm.onIntent(TodayIntent.SelectPhotosForLineClicked)
-
         assertEquals(TodayEffect.NavigateToGallerySelection, vm.effects.first())
     }
 }

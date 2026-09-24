@@ -28,4 +28,7 @@ include(":core:model")
 include(":core:designsystem")
 include(":core:domain")
 include(":feature:today")
+include(":core:testing")
+include(":core:media")
+include(":feature:gallery")
  
