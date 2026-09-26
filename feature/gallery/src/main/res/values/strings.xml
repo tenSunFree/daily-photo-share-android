@@ -1,0 +1,11 @@
+<resources>
+    <string name="gallery_permission_denied_title">需要照片權限</string>
+    <string name="gallery_permission_denied_message">允許存取照片後,才能瀏覽裝置上的圖片</string>
+    <string name="gallery_permission_request_action">允許存取照片</string>
+    <string name="gallery_open_settings_action">前往設定</string>
+    <string name="gallery_permission_partial_message">目前只能看到已授權的部分照片</string>
+    <string name="gallery_manage_partial_access">管理可存取照片</string>
+    <string name="gallery_empty">沒有可顯示的照片</string>
+    <string name="gallery_error">無法載入照片</string>
+    <string name="gallery_action_retry">重試</string>
+</resources>

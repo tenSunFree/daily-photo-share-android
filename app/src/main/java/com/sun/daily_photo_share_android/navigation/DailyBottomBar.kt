@@ -11,6 +11,7 @@ import androidx.navigation.NavDestination
 import com.sun.daily_photo_share_android.R
 import com.sun.daily_photo_share_android.core.designsystem.DailyIcons
 import com.sun.daily_photo_share_android.feature.today.TodayDestination
+import com.sun.daily_photo_share_android.feature.gallery.GalleryDestination
 
 /** Today | Camera | Gallery. Camera is an action, so it is never shown as selected. */
 @Composable

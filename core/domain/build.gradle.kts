@@ -8,10 +8,11 @@ kotlin {
 }
 
 dependencies {
-    // Repository / UseCase signatures expose model types and Flow.
+    // Repository / UseCase signatures expose model types, Flow and PagingData.
     api(project(":core:model"))
     api(libs.kotlinx.coroutines.core)
-
+    // paging-common has no Android framework dependency: a deliberate, pragmatic dependency on Jetpack Paging.
+    api(libs.androidx.paging.common)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }

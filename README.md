@@ -52,18 +52,22 @@ Screenshots are added once the capture → organize → share flow is implemente
 - [x] Android-focused `.gitignore` (Gradle, Kotlin, IDE, keystores, local config)
 - [x] Navigation shell: single activity, type-safe routes, bottom navigation (Today | Camera | Gallery)
 - [x] Today screen as an MVI / UDF vertical slice (Intent, immutable UiState, Effect, reducer, ViewModel) on sample data, covered by reducer, ViewModel and use case unit tests
+- [x] Gallery screen: MediaStore-backed photo grid with Paging 3 and Coil thumbnails; full / partial (Android 14+) / denied permission states, re-selection of partially shared photos, and a route to app settings after repeated denial
+- [x] Shared test utilities module (`:core:testing`)
 
 ### Planned
 
 - [ ] Today screen backed by real MediaStore data
 - [ ] Camera capture with CameraX
 - [ ] Automatic date-based organization through MediaStore
-- [ ] Full device gallery browsing with Paging 3
-- [ ] Cross-source multi-selection
+- [ ] Album mode, date section headers, and cross-source multi-selection
 - [ ] LINE sharing
 - [ ] Jetpack Glance home screen widgets
-- [ ] Remaining modules (`:core:data`, `:core:media`, `:core:database`, further feature modules), added together with the features that need them
-- [ ] Automated testing beyond the current scope (Compose UI, instrumented)
+- [ ] System Photo Picker as an alternative when photo access is denied
+- [ ] Keyset (cursor-based) MediaStore pagination, replacing offset paging
+- [ ] Kotlin 2.4 upgrade (AGP, KSP and Compose compiler together), which also unblocks Coil 3.5+
+- [ ] Remaining modules (`:core:data`, `:core:database`, further feature modules), added together with the features that need them
+- [ ] Automated testing beyond the current scope (Compose UI, instrumented, MediaStore cursor reading)
 - [ ] CI/CD with GitHub Actions
 - [ ] Observability (crash reporting and analytics)
 
@@ -146,21 +150,23 @@ Screenshots are added once the capture → organize → share flow is implemente
   State holders with `StateFlow`, lifecycle-aware collection
 - Kotlin Coroutines / Flow  
   Asynchronous data streams in the domain layer
+- Paging 3  
+  Paginated MediaStore queries (Paging `3.5.1`; `paging-common` in `:core:domain`, `paging-compose` in `:feature:gallery`)
+- Coil 3  
+  Thumbnail loading for local `content://` URIs (Coil `3.4.0`)
+- MediaStore + runtime permissions  
+  Full / partial (Android 14+) / denied photo access, implemented in `:core:media`
 - Android Gradle Plugin + Gradle Kotlin DSL  
   Build system (AGP `9.2.1`, Gradle `9.4.1`, version catalog, configuration cache, build cache)
 - Multi-module Gradle build  
-  AGP 9 built-in Kotlin for Android modules, `kotlin-jvm` for the pure JVM `:core:model` and `:core:domain`
-- JUnit 4 / AndroidX Test / Espresso / Compose UI Test  
-  Testing dependencies wired into the project for local and instrumented tests
+  AGP 9 built-in Kotlin for Android modules, `kotlin-jvm` for the pure JVM `:core:model`, `:core:domain` and `:core:testing`
+- JUnit 4 / kotlinx-coroutines-test / AndroidX Test / Espresso / Compose UI Test  
+  Testing dependencies for local and instrumented tests
 
 ### Planned
 
 - CameraX  
   Camera preview and photo capture
-- MediaStore  
-  Saving and organizing photos by date, and reading the full device gallery
-- Paging 3  
-  Paginated gallery loading
 - Room / DataStore  
   Share history and preferences
 - Jetpack Glance  
@@ -191,6 +197,8 @@ Screenshots are added once the capture → organize → share flow is implemente
 3. Wait for Gradle sync to finish (the wrapper downloads Gradle and the JDK toolchains on first run)
 4. Select the `app` run configuration and run it on an emulator or a physical device
 
+Partial photo access (Android 14+) is best tested on an API 34+ emulator.
+
 ### Command line
 
 ```bash
@@ -198,6 +206,9 @@ Screenshots are added once the capture → organize → share flow is implemente
 ./gradlew test                      # run all local unit tests
 ./gradlew :core:model:test          # run pure-JVM domain tests only (fast)
 ./gradlew connectedAndroidTest      # run instrumented tests (device or emulator required)
+
+# check which kotlin-stdlib version the app resolves (must stay below 2.4, see Architecture Decisions)
+./gradlew :app:dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib --configuration debugCompileClasspath
 ```
 
 On Windows, use `gradlew.bat` instead of `./gradlew` (PowerShell: `./gradlew` also works).
@@ -226,9 +237,12 @@ daily-photo-share-android
 ├─ core
 │  ├─ model                              # Pure Kotlin/JVM: domain models and rules (no Android)
 │  ├─ domain                             # Pure Kotlin/JVM: repository interfaces and use cases
-│  └─ designsystem                       # Android library: tokens, theme, icons, components
+│  ├─ media                              # Android library: MediaStore, photo permissions, paging
+│  ├─ designsystem                       # Android library: tokens, theme, icons, components
+│  └─ testing                            # Pure Kotlin/JVM: shared test utilities
 ├─ feature
-│  └─ today                              # Today screen: MVI contract, reducer, ViewModel, UI
+│  ├─ today                              # Today screen: MVI contract, reducer, ViewModel, UI
+│  └─ gallery                            # Gallery screen: permission states, photo grid
 ├─ gradle
 │  ├─ libs.versions.toml                 # Version catalog
 │  ├─ gradle-daemon-jvm.properties       # Daemon JDK toolchain (JDK 21)
@@ -242,12 +256,16 @@ daily-photo-share-android
 Module dependency direction:
 
 ```text
-:app ──► :feature:today ──► :core:domain ──► :core:model
- │              └──────────► :core:designsystem
- └─► :core:domain, :core:model, :core:designsystem
+:app ──► :feature:today ────┬──► :core:domain ──► :core:model
+ │                           └──► :core:designsystem
+ ├──► :feature:gallery ─────┬──► :core:domain
+ │                           └──► :core:designsystem
+ └──► :core:media ──────────────► :core:domain   (implements and binds the repository interfaces)
+
+Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testing
 ```
 
-`:core:model` and `:core:domain` stay free of Android and Compose; `:core:designsystem` does not depend on the domain modules.
+`:core:model`, `:core:domain` and `:core:testing` are plain JVM modules. Feature modules never depend on `:core:media`; `:app` depends on it so its Hilt bindings are part of the app's dependency graph. `:core:designsystem` does not depend on the domain modules.
 
 ---
 
@@ -256,15 +274,23 @@ Module dependency direction:
 - **minSdk 29 (Android 10+).** Photos are written to `Pictures/DailyShare/<date>/` through MediaStore `RELATIVE_PATH` (API 29). Supporting Android 7-9 would require a separate legacy storage path, which is not worth maintaining for this project.
 - **Media identity is a content URI string (`MediaUri`).** Temporary URIs from the system Photo Picker have no MediaStore `_ID`, but must still be selectable and shareable.
 - **`PhotoSelection` is an immutable ordered list.** List order is the share order and the on-screen badge number, so every operation is a pure function of the previous state (easy to reducer-test).
-- **The domain model is Android-free.** `:core:model` and `:core:domain` use only `java.time`, Kotlin types and coroutines, so their tests run on the plain JVM in seconds. Conversion to `android.net.Uri` happens at the sharing boundary.
+- **The domain layer stays Android-framework-free.** `:core:model` and `:core:domain` use only `java.time`, Kotlin types, coroutines and `paging-common`, so their tests run on the plain JVM. `paging-common` has no Android framework dependency; exposing `PagingData` in domain interfaces is a deliberate, pragmatic dependency on Jetpack Paging.
 - **Modules are created on demand.** No empty placeholder modules; each module appears with its first real implementation.
-- **No shared MVI framework up front.** Intent / State / Effect / Reducer are implemented directly in one feature; common abstractions are extracted only after several features show real duplication.
+- **No shared MVI framework up front.** Intent / State / Effect / Reducer are implemented directly in each feature; common abstractions are extracted only after several features show real duplication.
 - **Retrofit / OkHttp are deferred.** The app is offline-first; a remote layer is added only when cloud features are.
 - **Share status is `HANDED_OFF`, never "success".** The app can only prove it handed the images to another app, not that the message was sent or received.
-- **`:core:domain` has no DI annotations.** Use cases are plain classes constructed in a Hilt module in `:app`, so the domain layer does not know which DI framework is used.
-- **Screens are split into Route and Screen.** `XRoute` connects the ViewModel (collect state, forward intents, turn effects into navigation); `XScreen` is stateless (UiState in, Intent out).
-- **Reload on every resume.** The Today screen re-reads its data whenever it resumes, so it also reflects a changed calendar date without a background timer.
+- **`:core:domain` has no DI annotations.** Use cases are plain classes constructed in Hilt modules in `:app` (`TodayModule`, `GalleryModule`); the repositories they need are bound by the modules that implement them, such as `:core:media`. The domain layer does not know which DI framework is used.
+- **Screens are split into Route and Screen.** `XRoute` connects the ViewModel (collect state, forward intents, turn effects into navigation or system actions); `XScreen` is stateless (UiState in, Intent out).
+- **Reload on every resume.** The Today screen re-reads its data whenever it resumes, so it also reflects a changed calendar date without a background timer. The Gallery screen re-checks photo permission on every resume.
 - **Icons go through the design system.** Features use `DailyIcons` and never import an icon library directly, so the icon source can change in one module.
+- **Platform implementations bind themselves.** `:core:media` owns the MediaStore and permission implementations and binds them to the `:core:domain` repository interfaces. Implementations and the Hilt module are `internal`, so no other module can depend on them directly.
+- **Permission-state resolution is pure logic.** Full / partial / denied classification lives in `MediaPermissionResolver`, which takes the API level as a parameter, so every Android 10-14+ branch is covered by plain JVM tests.
+- **Cursor reading and model mapping are separated.** `MediaStoreImageDataSource` reads `Cursor` values and builds the content URI; `MediaStoreMapper` receives plain values and is fully JVM-testable.
+- **Offset keys are direction-aware.** A paging key is the page start for refresh and append, and the page end for prepend. Pages are then always adjacent, so refreshing from any scroll position produces neither gaps nor duplicate grid keys.
+- **MediaStore observation is tied to collection.** The `ContentObserver` is registered while the paging flow is collected and unregistered in `finally`; changes invalidate the current source through `InvalidatingPagingSourceFactory`.
+- **The photo query restarts only when the readable set may have changed.** A permission change, or any check while access is partial, bumps `accessRevision`; Full → Full keeps the running query, so returning to the screen does not reload the grid.
+- **Coroutine cancellation is never converted into a paging error.** `CancellationException` is rethrown; genuine query failures become `LoadResult.Error`.
+- **Dependencies must stay within the Kotlin compiler's metadata range.** The Kotlin 2.2 compiler reads library metadata up to 2.3, so no dependency may pull `kotlin-stdlib` 2.4 or newer (Coil is pinned to 3.4.0 for this reason). New dependencies are checked with `dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib`.
 
 ---
 

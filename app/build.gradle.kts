@@ -38,8 +38,10 @@ android {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:domain"))
+    implementation(project(":core:media"))
     implementation(project(":core:designsystem"))
     implementation(project(":feature:today"))
+    implementation(project(":feature:gallery"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
