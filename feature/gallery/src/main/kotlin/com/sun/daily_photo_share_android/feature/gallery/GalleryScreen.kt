@@ -31,6 +31,9 @@ import com.sun.daily_photo_share_android.core.designsystem.components.DailyTonal
 import com.sun.daily_photo_share_android.core.model.MediaPhoto
 import com.sun.daily_photo_share_android.core.model.PhotoPermissionState
 
+/** Photo keys are content URIs, so this key can never collide with a photo. */
+private const val REFRESH_ERROR_KEY = "gallery-refresh-error"
+
 /** UiState + paging items in, Intent out. Holds no state of its own. */
 @Composable
 fun GalleryScreen(
@@ -68,7 +71,10 @@ private fun PermissionDeniedContent(
         modifier = modifier
             .fillMaxSize()
             .padding(DailyTheme.spacing.md),
-        verticalArrangement = Arrangement.spacedBy(DailyTheme.spacing.sm, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(
+            DailyTheme.spacing.sm,
+            Alignment.CenterVertically
+        ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -142,6 +148,18 @@ private fun PhotoGrid(photos: LazyPagingItems<MediaPhoto>, modifier: Modifier = 
             horizontalArrangement = Arrangement.spacedBy(DailyTheme.spacing.xxs),
             verticalArrangement = Arrangement.spacedBy(DailyTheme.spacing.xxs),
         ) {
+            // A failed refresh keeps the previous photos on screen; say so and offer a retry.
+            if (refresh is LoadState.Error) {
+                item(key = REFRESH_ERROR_KEY, span = { GridItemSpan(maxLineSpan) }) {
+                    MessageWithAction(
+                        message = stringResource(R.string.gallery_error),
+                        actionText = stringResource(R.string.gallery_action_retry),
+                        onAction = photos::retry,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
             items(count = photos.itemCount, key = photos.itemKey { it.uri.value }) { index ->
                 photos[index]?.let { photo -> PhotoTile(photo) }
             }
@@ -182,7 +200,10 @@ private fun MessageWithAction(
 ) {
     Column(
         modifier = modifier.padding(DailyTheme.spacing.md),
-        verticalArrangement = Arrangement.spacedBy(DailyTheme.spacing.sm, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(
+            DailyTheme.spacing.sm,
+            Alignment.CenterVertically
+        ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(text = message, style = MaterialTheme.typography.bodyMedium)

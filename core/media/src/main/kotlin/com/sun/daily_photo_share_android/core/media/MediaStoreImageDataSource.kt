@@ -11,6 +11,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 /** Reads one page of MediaStore.Images rows. Thin adapter: Cursor in, pure mapping out. */
 internal class MediaStoreImageDataSource @Inject constructor(
@@ -33,18 +34,22 @@ internal class MediaStoreImageDataSource @Inject constructor(
             )
             putInt(
                 ContentResolver.QUERY_ARG_SORT_DIRECTION,
-                ContentResolver.QUERY_SORT_DIRECTION_DESCENDING
+                ContentResolver.QUERY_SORT_DIRECTION_DESCENDING,
             )
             putInt(ContentResolver.QUERY_ARG_OFFSET, offset)
             putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
         }
 
-        return context.contentResolver.query(
+        // A null cursor means the provider failed; report it so Paging shows a retryable error
+        // instead of an empty gallery.
+        val cursor = context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             PROJECTION,
             queryArgs,
             null,
-        )?.use { cursor ->
+        ) ?: throw IOException("MediaStore query returned no cursor")
+
+        return cursor.use {
             val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
             val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
             val mimeIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.MIME_TYPE)
@@ -79,7 +84,7 @@ internal class MediaStoreImageDataSource @Inject constructor(
                     add(MediaStoreMapper.toMediaPhoto(row, MediaUri(uri.toString())))
                 }
             }
-        } ?: emptyList()
+        }
     }
 
     private companion object {
