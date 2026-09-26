@@ -22,6 +22,7 @@ data class DailySizes(
     val iconSmall: Dp = 16.dp,
     val iconMedium: Dp = 24.dp,
     val selectionBadge: Dp = 24.dp,
+    val selectionBorder: Dp = 2.dp,
     val photoGridMinCell: Dp = 110.dp,
 )
 
