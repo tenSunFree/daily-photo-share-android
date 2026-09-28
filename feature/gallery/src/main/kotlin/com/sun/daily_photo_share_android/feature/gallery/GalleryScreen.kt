@@ -1,10 +1,14 @@
 package com.sun.daily_photo_share_android.feature.gallery
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,15 +25,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.itemKey
 import coil3.compose.AsyncImage
 import com.sun.daily_photo_share_android.core.designsystem.DailyTheme
 import com.sun.daily_photo_share_android.core.designsystem.components.DailyButton
+import com.sun.daily_photo_share_android.core.designsystem.components.DailySelectionBadge
 import com.sun.daily_photo_share_android.core.designsystem.components.DailyTonalButton
 import com.sun.daily_photo_share_android.core.model.MediaPhoto
+import com.sun.daily_photo_share_android.core.model.MediaUri
 import com.sun.daily_photo_share_android.core.model.PhotoPermissionState
+import com.sun.daily_photo_share_android.core.model.PhotoSelection
 
 /** Photo keys are content URIs, so this key can never collide with a photo. */
 private const val REFRESH_ERROR_KEY = "gallery-refresh-error"
@@ -42,22 +51,36 @@ fun GalleryScreen(
     onIntent: (GalleryIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    when (state.permissionState) {
+    when (val permission = state.permissionState) {
         // One frame before the first check: render nothing rather than a wrong state.
         null -> Box(modifier.fillMaxSize())
-
         PhotoPermissionState.Denied -> PermissionDeniedContent(
             onRequestClick = { onIntent(GalleryIntent.RequestPermissionClicked) },
             onOpenSettingsClick = { onIntent(GalleryIntent.OpenSettingsClicked) },
             modifier = modifier,
         )
 
-        PhotoPermissionState.Partial -> Column(modifier = modifier.fillMaxSize()) {
-            PartialAccessBanner(onManageClick = { onIntent(GalleryIntent.ManageSelectedPhotosClicked) })
-            PhotoGrid(photos = photos, modifier = Modifier.fillMaxSize())
+        PhotoPermissionState.Partial, PhotoPermissionState.Full -> Column(modifier = modifier.fillMaxSize()) {
+            if (permission == PhotoPermissionState.Partial) {
+                PartialAccessBanner(onManageClick = { onIntent(GalleryIntent.ManageSelectedPhotosClicked) })
+            }
+            PhotoGrid(
+                photos = photos,
+                selection = state.selection,
+                isSelectionMode = state.isSelectionMode,
+                onPhotoClick = { onIntent(GalleryIntent.PhotoTapped(it)) },
+                onPhotoLongClick = { onIntent(GalleryIntent.PhotoLongPressed(it)) },
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            )
+            if (state.isSelectionMode) {
+                SelectionBar(
+                    count = state.selection.size,
+                    onClearClick = { onIntent(GalleryIntent.ClearSelectionClicked) },
+                )
+            }
         }
-
-        PhotoPermissionState.Full -> PhotoGrid(photos = photos, modifier = modifier.fillMaxSize())
     }
 }
 
@@ -73,7 +96,7 @@ private fun PermissionDeniedContent(
             .padding(DailyTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(
             DailyTheme.spacing.sm,
-            Alignment.CenterVertically
+            Alignment.CenterVertically,
         ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -121,9 +144,15 @@ private fun PartialAccessBanner(onManageClick: () -> Unit, modifier: Modifier = 
 }
 
 @Composable
-private fun PhotoGrid(photos: LazyPagingItems<MediaPhoto>, modifier: Modifier = Modifier) {
+private fun PhotoGrid(
+    photos: LazyPagingItems<MediaPhoto>,
+    selection: PhotoSelection,
+    isSelectionMode: Boolean,
+    onPhotoClick: (MediaUri) -> Unit,
+    onPhotoLongClick: (MediaUri) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val refresh = photos.loadState.refresh
-
     when {
         photos.itemCount == 0 && refresh is LoadState.Loading ->
             Box(modifier, contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -161,7 +190,15 @@ private fun PhotoGrid(photos: LazyPagingItems<MediaPhoto>, modifier: Modifier = 
             }
 
             items(count = photos.itemCount, key = photos.itemKey { it.uri.value }) { index ->
-                photos[index]?.let { photo -> PhotoTile(photo) }
+                photos[index]?.let { photo ->
+                    PhotoTile(
+                        photo = photo,
+                        selectionOrder = selection.orderOf(photo.uri),
+                        isSelectionMode = isSelectionMode,
+                        onClick = { onPhotoClick(photo.uri) },
+                        onLongClick = { onPhotoLongClick(photo.uri) },
+                    )
+                }
             }
 
             when (photos.loadState.append) {
@@ -202,7 +239,7 @@ private fun MessageWithAction(
         modifier = modifier.padding(DailyTheme.spacing.md),
         verticalArrangement = Arrangement.spacedBy(
             DailyTheme.spacing.sm,
-            Alignment.CenterVertically
+            Alignment.CenterVertically,
         ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -211,16 +248,79 @@ private fun MessageWithAction(
     }
 }
 
-/** Coil sizes the decode to the tile's constraints, so full-resolution images are never loaded here. */
+/**
+ * Coil sizes the decode to the tile's constraints, so full-resolution images are never loaded here.
+ * In selection mode every tile shows a badge: numbered when selected, empty when selectable.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PhotoTile(photo: MediaPhoto, modifier: Modifier = Modifier) {
-    AsyncImage(
-        model = photo.uri.value,
-        contentDescription = photo.displayName,
-        contentScale = ContentScale.Crop,
+private fun PhotoTile(
+    photo: MediaPhoto,
+    selectionOrder: Int?,
+    isSelectionMode: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isSelected = selectionOrder != null
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-    )
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .semantics { selected = isSelected },
+    ) {
+        AsyncImage(
+            model = photo.uri.value,
+            contentDescription = photo.displayName,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .border(DailyTheme.sizes.selectionBorder, MaterialTheme.colorScheme.primary),
+            )
+        }
+        if (isSelectionMode) {
+            DailySelectionBadge(
+                order = selectionOrder,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(DailyTheme.spacing.xs),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectionBar(count: Int, onClearClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = DailyTheme.spacing.md, vertical = DailyTheme.spacing.sm),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (count == 0) {
+                    stringResource(R.string.gallery_selection_hint)
+                } else {
+                    stringResource(R.string.gallery_selected_count, count)
+                },
+                style = MaterialTheme.typography.titleSmall,
+            )
+            DailyTonalButton(
+                text = stringResource(R.string.gallery_action_clear),
+                onClick = onClearClick,
+                enabled = count > 0,
+            )
+        }
+    }
 }
