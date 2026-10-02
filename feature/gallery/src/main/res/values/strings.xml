@@ -8,4 +8,7 @@
     <string name="gallery_empty">沒有可顯示的照片</string>
     <string name="gallery_error">無法載入照片</string>
     <string name="gallery_action_retry">重試</string>
+    <string name="gallery_selected_count">已選 %1$d 張</string>
+    <string name="gallery_selection_hint">點選照片加入分享</string>
+    <string name="gallery_action_clear">清除</string>
 </resources>

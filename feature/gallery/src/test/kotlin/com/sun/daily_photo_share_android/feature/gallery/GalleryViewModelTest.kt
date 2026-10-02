@@ -1,5 +1,6 @@
 package com.sun.daily_photo_share_android.feature.gallery
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.paging.PagingData
 import com.sun.daily_photo_share_android.core.domain.GetPhotoPermissionStateUseCase
 import com.sun.daily_photo_share_android.core.domain.GetRequestablePermissionsUseCase
@@ -7,6 +8,7 @@ import com.sun.daily_photo_share_android.core.domain.MediaGalleryRepository
 import com.sun.daily_photo_share_android.core.domain.ObserveDevicePhotosUseCase
 import com.sun.daily_photo_share_android.core.domain.PhotoPermissionRepository
 import com.sun.daily_photo_share_android.core.model.MediaPhoto
+import com.sun.daily_photo_share_android.core.model.MediaUri
 import com.sun.daily_photo_share_android.core.model.PhotoPermissionState
 import com.sun.daily_photo_share_android.core.testing.MainDispatcherRule
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -24,6 +27,8 @@ class GalleryViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val requestable = listOf("android.permission.READ_MEDIA_IMAGES")
+    private val a = MediaUri("content://media/external/images/media/1")
+    private val b = MediaUri("content://media/external/images/media/2")
 
     private class FakePermissionRepository(
         var state: PhotoPermissionState,
@@ -37,25 +42,26 @@ class GalleryViewModelTest {
         override fun observePhotos(): Flow<PagingData<MediaPhoto>> = flowOf(PagingData.empty())
     }
 
-    private fun viewModel(permissions: FakePermissionRepository) = GalleryViewModel(
+    private fun viewModel(
+        permissions: FakePermissionRepository,
+        savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    ) = GalleryViewModel(
         getPermissionState = GetPhotoPermissionStateUseCase(permissions),
         getRequestablePermissions = GetRequestablePermissionsUseCase(permissions),
         observeDevicePhotos = ObserveDevicePhotosUseCase(EmptyGalleryRepository),
+        savedStateHandle = savedStateHandle,
     )
 
     @Test
     fun initialState_isUnchecked_untilTheFirstCheck() {
         val vm = viewModel(FakePermissionRepository(PhotoPermissionState.Full, requestable))
-
         assertNull(vm.state.value.permissionState)
     }
 
     @Test
     fun checkPermission_readsTheCurrentState() {
         val vm = viewModel(FakePermissionRepository(PhotoPermissionState.Partial, requestable))
-
         vm.onIntent(GalleryIntent.CheckPermission)
-
         assertEquals(PhotoPermissionState.Partial, vm.state.value.permissionState)
     }
 
@@ -63,38 +69,61 @@ class GalleryViewModelTest {
     fun checkPermission_picksUpAChangeMadeInSettings() {
         val permissions = FakePermissionRepository(PhotoPermissionState.Full, requestable)
         val vm = viewModel(permissions)
-
         vm.onIntent(GalleryIntent.CheckPermission)
         permissions.state = PhotoPermissionState.Denied
         vm.onIntent(GalleryIntent.CheckPermission)
-
         assertEquals(PhotoPermissionState.Denied, vm.state.value.permissionState)
     }
 
     @Test
     fun requestPermissionClicked_emitsTheRequestablePermissions() = runTest {
         val vm = viewModel(FakePermissionRepository(PhotoPermissionState.Denied, requestable))
-
         vm.onIntent(GalleryIntent.RequestPermissionClicked)
-
         assertEquals(GalleryEffect.RequestPermissions(requestable), vm.effects.first())
     }
 
     @Test
     fun manageSelectedPhotosClicked_requestsTheSamePermissionsAgain() = runTest {
         val vm = viewModel(FakePermissionRepository(PhotoPermissionState.Partial, requestable))
-
         vm.onIntent(GalleryIntent.ManageSelectedPhotosClicked)
-
         assertEquals(GalleryEffect.RequestPermissions(requestable), vm.effects.first())
     }
 
     @Test
     fun openSettingsClicked_emitsOpenAppSettings() = runTest {
         val vm = viewModel(FakePermissionRepository(PhotoPermissionState.Denied, requestable))
-
         vm.onIntent(GalleryIntent.OpenSettingsClicked)
-
         assertEquals(GalleryEffect.OpenAppSettings, vm.effects.first())
+    }
+
+    @Test
+    fun selection_isSavedInOrder() {
+        val handle = SavedStateHandle()
+        val vm = viewModel(FakePermissionRepository(PhotoPermissionState.Full, requestable), handle)
+        vm.onIntent(GalleryIntent.PhotoLongPressed(b))
+        vm.onIntent(GalleryIntent.PhotoTapped(a))
+        assertEquals(
+            listOf(b.value, a.value),
+            handle.get<List<String>>(GalleryViewModel.SELECTION_KEY)
+        )
+    }
+
+    @Test
+    fun selection_isRestoredAfterProcessDeath() {
+        val handle = SavedStateHandle(
+            mapOf(GalleryViewModel.SELECTION_KEY to arrayListOf(b.value, a.value)),
+        )
+        val vm = viewModel(FakePermissionRepository(PhotoPermissionState.Full, requestable), handle)
+        assertEquals(listOf(b, a), vm.state.value.selection.items)
+        assertTrue(vm.state.value.isSelectionMode)
+    }
+
+    @Test
+    fun clearedSelection_isSavedAsEmpty() {
+        val handle = SavedStateHandle()
+        val vm = viewModel(FakePermissionRepository(PhotoPermissionState.Full, requestable), handle)
+        vm.onIntent(GalleryIntent.PhotoLongPressed(a))
+        vm.onIntent(GalleryIntent.ClearSelectionClicked)
+        assertEquals(emptyList<String>(), handle.get<List<String>>(GalleryViewModel.SELECTION_KEY))
     }
 }

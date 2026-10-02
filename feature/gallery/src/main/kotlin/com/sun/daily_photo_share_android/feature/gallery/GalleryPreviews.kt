@@ -12,6 +12,7 @@ import com.sun.daily_photo_share_android.core.model.MediaUri
 import com.sun.daily_photo_share_android.core.model.PhotoPermissionState
 import java.time.Instant
 import kotlinx.coroutines.flow.flowOf
+import com.sun.daily_photo_share_android.core.model.PhotoSelection
 
 private fun samplePhoto(id: Long) = MediaPhoto(
     id = id,
@@ -63,6 +64,26 @@ private fun GalleryFullPreview() {
     DailyTheme {
         GalleryScreen(
             state = GalleryUiState(permissionState = PhotoPermissionState.Full),
+            photos = previewItems(12),
+            onIntent = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun GallerySelectionPreview() {
+    DailyTheme {
+        GalleryScreen(
+            state = GalleryUiState(
+                permissionState = PhotoPermissionState.Full,
+                selection = PhotoSelection().addAll(
+                    listOf(
+                        MediaUri("content://media/external/images/media/3"),
+                        MediaUri("content://media/external/images/media/1"),
+                    ),
+                ),
+            ),
             photos = previewItems(12),
             onIntent = {},
         )

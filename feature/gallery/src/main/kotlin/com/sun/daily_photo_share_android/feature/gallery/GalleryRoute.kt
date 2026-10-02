@@ -3,6 +3,7 @@ package com.sun.daily_photo_share_android.feature.gallery
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -18,9 +19,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 
-/** Connects [GalleryViewModel] to [GalleryScreen]: state, permission requests, Settings. */
+/** Connects [GalleryViewModel] to [GalleryScreen]: state, permission requests, Settings, back. */
 @Composable
 fun GalleryRoute(
+    startInSelectionMode: Boolean,
     modifier: Modifier = Modifier,
     viewModel: GalleryViewModel = hiltViewModel(),
 ) {
@@ -28,6 +30,16 @@ fun GalleryRoute(
     val photos = viewModel.photos.collectAsLazyPagingItems()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Idempotent, so re-sending after a configuration change or process death is harmless.
+    LaunchedEffect(startInSelectionMode) {
+        if (startInSelectionMode) viewModel.onIntent(GalleryIntent.SelectionModeRequested)
+    }
+
+    // Back clears a selection first; with nothing selected, back navigates as usual.
+    BackHandler(enabled = !state.selection.isEmpty) {
+        viewModel.onIntent(GalleryIntent.ClearSelectionClicked)
+    }
 
     // The permission dialog pauses and resumes this Activity, so the ON_RESUME check below
     // already picks up the result. Checking here too would restart the Partial query twice.
