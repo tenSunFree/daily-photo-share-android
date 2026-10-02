@@ -8,6 +8,7 @@
 [![Gradle](https://img.shields.io/badge/Gradle-9.4.1-02303A?logo=gradle&logoColor=white)](https://gradle.org)
 [![minSdk](https://img.shields.io/badge/minSdk-29-3DDC84?logo=android&logoColor=white)](#environment)
 [![targetSdk](https://img.shields.io/badge/targetSdk-37-3DDC84?logo=android&logoColor=white)](#environment)
+[![Android CI](https://github.com/tenSunFree/daily-photo-share-android/actions/workflows/ci.yml/badge.svg)](https://github.com/tenSunFree/daily-photo-share-android/actions/workflows/ci.yml)
 
 ---
 
@@ -54,21 +55,24 @@ Screenshots are added once the capture → organize → share flow is implemente
 - [x] Today screen as an MVI / UDF vertical slice (Intent, immutable UiState, Effect, reducer, ViewModel) on sample data, covered by reducer, ViewModel and use case unit tests
 - [x] Gallery screen: MediaStore-backed photo grid with Paging 3 and Coil thumbnails; full / partial (Android 14+) / denied permission states, re-selection of partially shared photos, and a route to app settings after repeated denial
 - [x] Shared test utilities module (`:core:testing`)
+- [x] Cross-source multi-selection in the gallery: long press to start, tap to toggle, numbered share-order badges, selection bar, picker mode when opened from the Today screen, and the ordered selection kept across configuration changes and process recreation
+- [x] GitHub Actions CI on every pull request and push to `main`: kotlin-stdlib version guard, unit tests, debug build, test reports uploaded on failure
 
 ### Planned
 
 - [ ] Today screen backed by real MediaStore data
 - [ ] Camera capture with CameraX
 - [ ] Automatic date-based organization through MediaStore
-- [ ] Album mode, date section headers, and cross-source multi-selection
-- [ ] LINE sharing
+- [ ] Share the selection to LINE or the system share sheet, with share history
+- [ ] Album mode, date section headers, and full-screen photo preview
 - [ ] Jetpack Glance home screen widgets
 - [ ] System Photo Picker as an alternative when photo access is denied
 - [ ] Keyset (cursor-based) MediaStore pagination, replacing offset paging
 - [ ] Kotlin 2.4 upgrade (AGP, KSP and Compose compiler together), which also unblocks Coil 3.5+
 - [ ] Remaining modules (`:core:data`, `:core:database`, further feature modules), added together with the features that need them
 - [ ] Automated testing beyond the current scope (Compose UI, instrumented, MediaStore cursor reading)
-- [ ] CI/CD with GitHub Actions
+- [ ] Static analysis in CI (Android Lint, ktlint, detekt) and test coverage
+- [ ] Release pipeline (signed builds, Play Console)
 - [ ] Observability (crash reporting and analytics)
 
 ---
@@ -146,8 +150,8 @@ Screenshots are added once the capture → organize → share flow is implemente
   Dependency injection (Hilt `2.60.1`, KSP `2.3.9`)
 - Navigation Compose (type-safe routes) + kotlinx.serialization  
   Single-activity navigation (Navigation Compose `2.10.1`)
-- Lifecycle ViewModel + `androidx.hilt` ViewModel integration  
-  State holders with `StateFlow`, lifecycle-aware collection
+- Lifecycle ViewModel + `SavedStateHandle` + `androidx.hilt` ViewModel integration  
+  State holders with `StateFlow`, lifecycle-aware collection, state kept across process recreation
 - Kotlin Coroutines / Flow  
   Asynchronous data streams in the domain layer
 - Paging 3  
@@ -162,6 +166,8 @@ Screenshots are added once the capture → organize → share flow is implemente
   AGP 9 built-in Kotlin for Android modules, `kotlin-jvm` for the pure JVM `:core:model`, `:core:domain` and `:core:testing`
 - JUnit 4 / kotlinx-coroutines-test / AndroidX Test / Espresso / Compose UI Test  
   Testing dependencies for local and instrumented tests
+- GitHub Actions  
+  CI on pull requests and `main`: kotlin-stdlib guard, unit tests, debug build
 
 ### Planned
 
@@ -171,8 +177,6 @@ Screenshots are added once the capture → organize → share flow is implemente
   Share history and preferences
 - Jetpack Glance  
   Home screen widgets
-- GitHub Actions  
-  Build, test, and release automation
 
 ---
 
@@ -213,6 +217,8 @@ Partial photo access (Android 14+) is best tested on an API 34+ emulator.
 
 On Windows, use `gradlew.bat` instead of `./gradlew` (PowerShell: `./gradlew` also works).
 
+CI runs the same `test` and `assembleDebug` tasks, so a green local run of `./gradlew test assembleDebug` is expected to pass CI.
+
 ### Local configuration and secrets
 
 The following files are intentionally excluded from version control by `.gitignore`:
@@ -233,6 +239,9 @@ The Gradle wrapper JAR (`gradle/wrapper/gradle-wrapper.jar`) is kept in the repo
 
 ```text
 daily-photo-share-android
+├─ .github
+│  └─ workflows
+│     └─ ci.yml                          # Android CI: stdlib guard, unit tests, debug build
 ├─ app                                   # Application, Activity, navigation shell, Hilt wiring
 ├─ core
 │  ├─ model                              # Pure Kotlin/JVM: domain models and rules (no Android)
@@ -242,7 +251,7 @@ daily-photo-share-android
 │  └─ testing                            # Pure Kotlin/JVM: shared test utilities
 ├─ feature
 │  ├─ today                              # Today screen: MVI contract, reducer, ViewModel, UI
-│  └─ gallery                            # Gallery screen: permission states, photo grid
+│  └─ gallery                            # Gallery screen: permission states, photo grid, multi-selection
 ├─ gradle
 │  ├─ libs.versions.toml                 # Version catalog
 │  ├─ gradle-daemon-jvm.properties       # Daemon JDK toolchain (JDK 21)
@@ -290,7 +299,11 @@ Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testin
 - **MediaStore observation is tied to collection.** The `ContentObserver` is registered while the paging flow is collected and unregistered in `finally`; changes invalidate the current source through `InvalidatingPagingSourceFactory`.
 - **The photo query restarts only when the readable set may have changed.** A permission change, or any check while access is partial, bumps `accessRevision`; Full → Full keeps the running query, so returning to the screen does not reload the grid.
 - **Coroutine cancellation is never converted into a paging error.** `CancellationException` is rethrown; genuine query failures become `LoadResult.Error`.
-- **Dependencies must stay within the Kotlin compiler's metadata range.** The Kotlin 2.2 compiler reads library metadata up to 2.3, so no dependency may pull `kotlin-stdlib` 2.4 or newer (Coil is pinned to 3.4.0 for this reason). New dependencies are checked with `dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib`.
+- **Selection mode is derived, not stored.** `GalleryUiState.isSelectionMode` is true when the gallery was opened as a picker or at least one photo is selected, so "selecting" and "has a selection" can never disagree. Clearing the selection leaves selection mode in the normal gallery but not in picker mode.
+- **The selection survives process recreation.** Selected content URI strings are written to `SavedStateHandle` on every change and rebuilt into a `PhotoSelection` when the ViewModel is recreated. Picker mode is not saved; it comes back from the navigation argument.
+- **Photo identity is independent of paging position.** The selection holds `MediaUri` values, not grid indices, so item recycling, pagination and query refreshes change neither which photos are selected nor their order.
+- **Losing photo access clears the selection.** When permission becomes denied the selected photos are unreadable, so they are dropped instead of failing later at share time.
+- **Dependencies must stay within the Kotlin compiler's metadata range.** The Kotlin 2.2 compiler reads library metadata up to 2.3, so no dependency may pull `kotlin-stdlib` 2.4 or newer (Coil is pinned to 3.4.0 for this reason). CI enforces this on every pull request; locally, check with `dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib`.
 
 ---
 
@@ -298,7 +311,7 @@ Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testin
 
 This project is created for independent learning and demonstration purposes.
 
-Badges for CI, coverage, and monitoring are added to the top of this README when the corresponding pipelines exist.
+Badges for coverage and monitoring are added to the top of this README when the corresponding pipelines exist.
 
 ---
 
