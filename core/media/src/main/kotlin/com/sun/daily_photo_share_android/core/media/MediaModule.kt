@@ -1,6 +1,7 @@
 package com.sun.daily_photo_share_android.core.media
 
 import com.sun.daily_photo_share_android.core.domain.MediaGalleryRepository
+import com.sun.daily_photo_share_android.core.domain.MediaReadabilityChecker
 import com.sun.daily_photo_share_android.core.domain.PhotoPermissionRepository
 import dagger.Binds
 import dagger.Module
@@ -14,6 +15,9 @@ import dagger.hilt.components.SingletonComponent
 @Module
 @InstallIn(SingletonComponent::class)
 internal abstract class MediaModule {
+
+    @Binds
+    abstract fun bindMediaReadabilityChecker(impl: ContentResolverReadabilityChecker): MediaReadabilityChecker
 
     @Binds
     abstract fun bindMediaGalleryRepository(impl: MediaGalleryRepositoryImpl): MediaGalleryRepository
