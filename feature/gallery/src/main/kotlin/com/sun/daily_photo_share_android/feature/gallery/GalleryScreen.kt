@@ -20,6 +20,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +56,7 @@ fun GalleryScreen(
     when (val permission = state.permissionState) {
         // One frame before the first check: render nothing rather than a wrong state.
         null -> Box(modifier.fillMaxSize())
+
         PhotoPermissionState.Denied -> PermissionDeniedContent(
             onRequestClick = { onIntent(GalleryIntent.RequestPermissionClicked) },
             onOpenSettingsClick = { onIntent(GalleryIntent.OpenSettingsClicked) },
@@ -77,10 +80,21 @@ fun GalleryScreen(
             if (state.isSelectionMode) {
                 SelectionBar(
                     count = state.selection.size,
+                    canShare = state.canShare,
                     onClearClick = { onIntent(GalleryIntent.ClearSelectionClicked) },
+                    onShareClick = { onIntent(GalleryIntent.ShareClicked) },
+                    onShareToLineClick = { onIntent(GalleryIntent.ShareToLineClicked) },
                 )
             }
         }
+    }
+
+    state.shareProblem?.let { problem ->
+        ShareProblemDialog(
+            problem = problem,
+            onUseSystemShareSheet = { onIntent(GalleryIntent.UseSystemShareSheetClicked) },
+            onDismiss = { onIntent(GalleryIntent.ShareProblemDismissed) },
+        )
     }
 }
 
@@ -154,21 +168,21 @@ private fun PhotoGrid(
 ) {
     val refresh = photos.loadState.refresh
     when {
-        photos.itemCount == 0 && refresh is LoadState.Loading ->
-            Box(modifier, contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        photos.itemCount == 0 && refresh is LoadState.Loading -> Box(
+            modifier,
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator() }
 
-        photos.itemCount == 0 && refresh is LoadState.Error ->
-            MessageWithAction(
-                message = stringResource(R.string.gallery_error),
-                actionText = stringResource(R.string.gallery_action_retry),
-                onAction = photos::retry,
-                modifier = modifier,
-            )
+        photos.itemCount == 0 && refresh is LoadState.Error -> MessageWithAction(
+            message = stringResource(R.string.gallery_error),
+            actionText = stringResource(R.string.gallery_action_retry),
+            onAction = photos::retry,
+            modifier = modifier,
+        )
 
-        photos.itemCount == 0 ->
-            Box(modifier, contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.gallery_empty))
-            }
+        photos.itemCount == 0 -> Box(modifier, contentAlignment = Alignment.Center) {
+            Text(stringResource(R.string.gallery_empty))
+        }
 
         else -> LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = DailyTheme.sizes.photoGridMinCell),
@@ -296,17 +310,23 @@ private fun PhotoTile(
 }
 
 @Composable
-private fun SelectionBar(count: Int, onClearClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun SelectionBar(
+    count: Int,
+    canShare: Boolean,
+    onClearClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onShareToLineClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = DailyTheme.spacing.md, vertical = DailyTheme.spacing.sm),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(DailyTheme.spacing.sm),
         ) {
             Text(
                 text = if (count == 0) {
@@ -316,11 +336,63 @@ private fun SelectionBar(count: Int, onClearClick: () -> Unit, modifier: Modifie
                 },
                 style = MaterialTheme.typography.titleSmall,
             )
-            DailyTonalButton(
-                text = stringResource(R.string.gallery_action_clear),
-                onClick = onClearClick,
-                enabled = count > 0,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(DailyTheme.spacing.sm, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DailyTonalButton(
+                    text = stringResource(R.string.gallery_action_clear),
+                    onClick = onClearClick,
+                    enabled = canShare,
+                )
+                DailyTonalButton(
+                    text = stringResource(R.string.gallery_action_share),
+                    onClick = onShareClick,
+                    enabled = canShare,
+                )
+                DailyButton(
+                    text = stringResource(R.string.gallery_action_share_line),
+                    onClick = onShareToLineClick,
+                    enabled = canShare,
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun ShareProblemDialog(
+    problem: ShareProblem,
+    onUseSystemShareSheet: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    when (problem) {
+        is ShareProblem.LineNotInstalled -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(stringResource(R.string.gallery_share_line_missing_title)) },
+            text = { Text(stringResource(R.string.gallery_share_line_missing_message)) },
+            confirmButton = {
+                TextButton(onClick = onUseSystemShareSheet) {
+                    Text(stringResource(R.string.gallery_share_use_other_app))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.gallery_action_cancel))
+                }
+            },
+        )
+
+        ShareProblem.NothingReadable -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(stringResource(R.string.gallery_share_nothing_readable_title)) },
+            text = { Text(stringResource(R.string.gallery_share_nothing_readable_message)) },
+            confirmButton = {
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.gallery_action_ok))
+                }
+            },
+        )
     }
 }
