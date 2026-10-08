@@ -11,4 +11,15 @@
     <string name="gallery_selected_count">已選 %1$d 張</string>
     <string name="gallery_selection_hint">點選照片加入分享</string>
     <string name="gallery_action_clear">清除</string>
+    <string name="gallery_action_share">分享…</string>
+    <string name="gallery_action_share_line">傳到 LINE</string>
+    <string name="gallery_share_chooser_title">分享照片</string>
+    <string name="gallery_share_skipped">已略過 %1$d 張無法讀取的照片</string>
+    <string name="gallery_share_line_missing_title">尚未安裝 LINE</string>
+    <string name="gallery_share_line_missing_message">可以改用其他 App 分享這些照片。</string>
+    <string name="gallery_share_use_other_app">使用其他 App 分享</string>
+    <string name="gallery_share_nothing_readable_title">無法分享</string>
+    <string name="gallery_share_nothing_readable_message">選取的照片已無法讀取,可能已被刪除或不在可存取範圍內。</string>
+    <string name="gallery_action_cancel">取消</string>
+    <string name="gallery_action_ok">確定</string>
 </resources>

@@ -1,8 +1,10 @@
 package com.sun.daily_photo_share_android.feature.gallery
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,8 +20,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.sun.daily_photo_share_android.core.share.ShareIntents
 
-/** Connects [GalleryViewModel] to [GalleryScreen]: state, permission requests, Settings, back. */
+/** Connects [GalleryViewModel] to [GalleryScreen]: state, permissions, Settings, back, sharing. */
 @Composable
 fun GalleryRoute(
     startInSelectionMode: Boolean,
@@ -67,6 +70,29 @@ fun GalleryRoute(
                                 Uri.fromParts("package", context.packageName, null),
                             ),
                         )
+
+                    is GalleryEffect.LaunchShare -> {
+                        if (effect.skippedCount > 0) {
+                            Toast.makeText(
+                                context,
+                                context.getString(
+                                    R.string.gallery_share_skipped,
+                                    effect.skippedCount
+                                ),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                        val intent = ShareIntents.create(
+                            request = effect.request,
+                            chooserTitle = context.getString(R.string.gallery_share_chooser_title),
+                        )
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: ActivityNotFoundException) {
+                            // LINE is missing or disabled; the screen offers the system share sheet.
+                            viewModel.onIntent(GalleryIntent.ShareTargetUnavailable(effect.request))
+                        }
+                    }
                 }
             }
         }

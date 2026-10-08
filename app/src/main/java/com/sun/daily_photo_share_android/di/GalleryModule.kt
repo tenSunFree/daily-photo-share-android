@@ -3,8 +3,10 @@ package com.sun.daily_photo_share_android.di
 import com.sun.daily_photo_share_android.core.domain.GetPhotoPermissionStateUseCase
 import com.sun.daily_photo_share_android.core.domain.GetRequestablePermissionsUseCase
 import com.sun.daily_photo_share_android.core.domain.MediaGalleryRepository
+import com.sun.daily_photo_share_android.core.domain.MediaReadabilityChecker
 import com.sun.daily_photo_share_android.core.domain.ObserveDevicePhotosUseCase
 import com.sun.daily_photo_share_android.core.domain.PhotoPermissionRepository
+import com.sun.daily_photo_share_android.core.domain.PrepareShareUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,4 +34,9 @@ object GalleryModule {
     fun provideObserveDevicePhotosUseCase(
         repository: MediaGalleryRepository,
     ): ObserveDevicePhotosUseCase = ObserveDevicePhotosUseCase(repository)
+
+    @Provides
+    fun providePrepareShareUseCase(
+        readabilityChecker: MediaReadabilityChecker,
+    ): PrepareShareUseCase = PrepareShareUseCase(readabilityChecker)
 }
