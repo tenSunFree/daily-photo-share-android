@@ -56,14 +56,15 @@ Screenshots are added once the capture → organize → share flow is implemente
 - [x] Gallery screen: MediaStore-backed photo grid with Paging 3 and Coil thumbnails; full / partial (Android 14+) / denied permission states, re-selection of partially shared photos, and a route to app settings after repeated denial
 - [x] Shared test utilities module (`:core:testing`)
 - [x] Cross-source multi-selection in the gallery: long press to start, tap to toggle, numbered share-order badges, selection bar, picker mode when opened from the Today screen, and the ordered selection kept across configuration changes and process recreation
+- [x] Share the selection to LINE or the system share sheet, in selection order: photos are checked for readability first, unreadable ones are skipped and removed from the selection, and the system share sheet is offered when LINE is not installed
 - [x] GitHub Actions CI on every pull request and push to `main`: kotlin-stdlib version guard, unit tests, debug build, test reports uploaded on failure
 
 ### Planned
 
+- [ ] Share history in Room, and a Today screen "last shared" backed by real data
 - [ ] Today screen backed by real MediaStore data
 - [ ] Camera capture with CameraX
 - [ ] Automatic date-based organization through MediaStore
-- [ ] Share the selection to LINE or the system share sheet, with share history
 - [ ] Album mode, date section headers, and full-screen photo preview
 - [ ] Jetpack Glance home screen widgets
 - [ ] System Photo Picker as an alternative when photo access is denied
@@ -158,6 +159,8 @@ Screenshots are added once the capture → organize → share flow is implemente
   Paginated MediaStore queries (Paging `3.5.1`; `paging-common` in `:core:domain`, `paging-compose` in `:feature:gallery`)
 - Coil 3  
   Thumbnail loading for local `content://` URIs (Coil `3.4.0`)
+- Android share Intents  
+  `ACTION_SEND` / `ACTION_SEND_MULTIPLE` with `ClipData` and read-URI grants, built in `:core:share`
 - MediaStore + runtime permissions  
   Full / partial (Android 14+) / denied photo access, implemented in `:core:media`
 - Android Gradle Plugin + Gradle Kotlin DSL  
@@ -201,7 +204,7 @@ Screenshots are added once the capture → organize → share flow is implemente
 3. Wait for Gradle sync to finish (the wrapper downloads Gradle and the JDK toolchains on first run)
 4. Select the `app` run configuration and run it on an emulator or a physical device
 
-Partial photo access (Android 14+) is best tested on an API 34+ emulator.
+Partial photo access (Android 14+) is best tested on an API 34+ emulator. Sharing to LINE needs a device (or a Play Store emulator image) with LINE installed; without LINE the app offers the system share sheet.
 
 ### Command line
 
@@ -247,11 +250,12 @@ daily-photo-share-android
 │  ├─ model                              # Pure Kotlin/JVM: domain models and rules (no Android)
 │  ├─ domain                             # Pure Kotlin/JVM: repository interfaces and use cases
 │  ├─ media                              # Android library: MediaStore, photo permissions, paging
+│  ├─ share                              # Android library: share Intent builder (LINE, system chooser)
 │  ├─ designsystem                       # Android library: tokens, theme, icons, components
 │  └─ testing                            # Pure Kotlin/JVM: shared test utilities
 ├─ feature
 │  ├─ today                              # Today screen: MVI contract, reducer, ViewModel, UI
-│  └─ gallery                            # Gallery screen: permission states, photo grid, multi-selection
+│  └─ gallery                            # Gallery screen: permissions, photo grid, multi-selection, sharing
 ├─ gradle
 │  ├─ libs.versions.toml                 # Version catalog
 │  ├─ gradle-daemon-jvm.properties       # Daemon JDK toolchain (JDK 21)
@@ -268,13 +272,14 @@ Module dependency direction:
 :app ──► :feature:today ────┬──► :core:domain ──► :core:model
  │                           └──► :core:designsystem
  ├──► :feature:gallery ─────┬──► :core:domain
- │                           └──► :core:designsystem
+ │                           ├──► :core:designsystem
+ │                           └──► :core:share ──► :core:model
  └──► :core:media ──────────────► :core:domain   (implements and binds the repository interfaces)
 
 Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testing
 ```
 
-`:core:model`, `:core:domain` and `:core:testing` are plain JVM modules. Feature modules never depend on `:core:media`; `:app` depends on it so its Hilt bindings are part of the app's dependency graph. `:core:designsystem` does not depend on the domain modules.
+`:core:model`, `:core:domain` and `:core:testing` are plain JVM modules; `:core:share` is a small Android library with no Hilt and no Compose. Feature modules never depend on `:core:media`; `:app` depends on it so its Hilt bindings are part of the app's dependency graph. Only `:feature:gallery` uses `:core:share`. `:core:designsystem` does not depend on the domain modules.
 
 ---
 
@@ -303,6 +308,10 @@ Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testin
 - **The selection survives process recreation.** Selected content URI strings are written to `SavedStateHandle` on every change and rebuilt into a `PhotoSelection` when the ViewModel is recreated. Picker mode is not saved; it comes back from the navigation argument.
 - **Photo identity is independent of paging position.** The selection holds `MediaUri` values, not grid indices, so item recycling, pagination and query refreshes change neither which photos are selected nor their order.
 - **Losing photo access clears the selection.** When permission becomes denied the selected photos are unreadable, so they are dropped instead of failing later at share time.
+- **Sharing is decided in the domain layer and launched from the Route.** `PrepareShareUseCase` decides which photos can be shared and in what order; `GalleryRoute` only starts the Intent. The ViewModel never touches `Intent` or `Context`, so the whole flow is covered by JVM tests.
+- **LINE is detected by trying, not by querying.** Starting the LINE Intent and catching `ActivityNotFoundException` needs no package-visibility `<queries>` entry, and also covers LINE being installed but disabled. The user is then offered the system share sheet.
+- **Photos are checked for readability before sharing.** A photo can disappear between selecting and sharing (deleted, or removed from partial access). Unreadable photos are dropped, reported with a toast, and removed from the selection instead of failing inside the receiving app. The checker treats any `RuntimeException` as unreadable, so a failing provider can never leave the share buttons disabled.
+- **The selection is kept after sharing.** The app can only confirm the hand-off, not delivery, so it does not clear the selection on the user's behalf.
 - **Dependencies must stay within the Kotlin compiler's metadata range.** The Kotlin 2.2 compiler reads library metadata up to 2.3, so no dependency may pull `kotlin-stdlib` 2.4 or newer (Coil is pinned to 3.4.0 for this reason). CI enforces this on every pull request; locally, check with `dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib`.
 
 ---
