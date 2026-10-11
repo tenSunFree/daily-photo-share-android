@@ -2,6 +2,7 @@ package com.sun.daily_photo_share_android.di
 
 import com.sun.daily_photo_share_android.core.domain.DateProvider
 import com.sun.daily_photo_share_android.core.domain.GetTodaySummaryUseCase
+import com.sun.daily_photo_share_android.core.domain.ShareHistoryRepository
 import com.sun.daily_photo_share_android.core.domain.SystemDateProvider
 import com.sun.daily_photo_share_android.core.domain.TodaySummaryRepository
 import dagger.Binds
@@ -30,7 +31,12 @@ abstract class TodayModule {
         @Provides
         fun provideGetTodaySummaryUseCase(
             repository: TodaySummaryRepository,
+            shareHistoryRepository: ShareHistoryRepository,
             dateProvider: DateProvider,
-        ): GetTodaySummaryUseCase = GetTodaySummaryUseCase(repository, dateProvider)
+        ): GetTodaySummaryUseCase = GetTodaySummaryUseCase(
+            repository = repository,
+            shareHistoryRepository = shareHistoryRepository,
+            dateProvider = dateProvider,
+        )
     }
 }
