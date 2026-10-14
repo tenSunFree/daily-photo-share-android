@@ -9,13 +9,16 @@ import com.sun.daily_photo_share_android.core.domain.GetPhotoPermissionStateUseC
 import com.sun.daily_photo_share_android.core.domain.GetRequestablePermissionsUseCase
 import com.sun.daily_photo_share_android.core.domain.ObserveDevicePhotosUseCase
 import com.sun.daily_photo_share_android.core.domain.PrepareShareUseCase
+import com.sun.daily_photo_share_android.core.domain.RecordShareHandOffUseCase
 import com.sun.daily_photo_share_android.core.domain.SharePreparation
 import com.sun.daily_photo_share_android.core.model.MediaPhoto
 import com.sun.daily_photo_share_android.core.model.MediaUri
 import com.sun.daily_photo_share_android.core.model.PhotoPermissionState
+import com.sun.daily_photo_share_android.core.model.ShareRequest
 import com.sun.daily_photo_share_android.core.model.ShareTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +40,7 @@ class GalleryViewModel @Inject constructor(
     private val getRequestablePermissions: GetRequestablePermissionsUseCase,
     private val observeDevicePhotos: ObserveDevicePhotosUseCase,
     private val prepareShare: PrepareShareUseCase,
+    private val recordShareHandOff: RecordShareHandOffUseCase,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -94,6 +98,8 @@ class GalleryViewModel @Inject constructor(
                     reduce(GalleryMutation.ShareProblemShown(ShareProblem.LineNotInstalled(intent.request)))
                 }
 
+            is GalleryIntent.ShareHandedOff -> recordHandOff(intent.request)
+
             GalleryIntent.UseSystemShareSheetClicked -> {
                 val problem = _state.value.shareProblem as? ShareProblem.LineNotInstalled ?: return
                 reduce(GalleryMutation.ShareProblemDismissed)
@@ -109,6 +115,19 @@ class GalleryViewModel @Inject constructor(
         }
     }
 
+    private fun recordHandOff(request: ShareRequest) {
+        viewModelScope.launch {
+            try {
+                recordShareHandOff(request)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The photos were already handed off. History is best-effort, so a failed
+                // write must not crash the app. Reported once observability exists (Step 13).
+            }
+        }
+    }
+
     private fun share(target: ShareTarget) {
         val current = _state.value
         if (!current.canShare) return
@@ -119,8 +138,8 @@ class GalleryViewModel @Inject constructor(
                     reduce(
                         GalleryMutation.SharePreparationFinished(
                             result.unreadable,
-                            problem = null
-                        )
+                            problem = null,
+                        ),
                     )
                     _effects.send(GalleryEffect.LaunchShare(result.request, result.unreadable.size))
                 }
