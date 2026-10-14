@@ -33,10 +33,7 @@ abstract class TodayModule {
             repository: TodaySummaryRepository,
             shareHistoryRepository: ShareHistoryRepository,
             dateProvider: DateProvider,
-        ): GetTodaySummaryUseCase = GetTodaySummaryUseCase(
-            repository = repository,
-            shareHistoryRepository = shareHistoryRepository,
-            dateProvider = dateProvider,
-        )
+        ): GetTodaySummaryUseCase =
+            GetTodaySummaryUseCase(repository, shareHistoryRepository, dateProvider)
     }
 }
