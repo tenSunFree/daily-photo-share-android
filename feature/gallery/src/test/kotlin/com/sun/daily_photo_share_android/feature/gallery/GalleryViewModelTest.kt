@@ -9,12 +9,18 @@ import com.sun.daily_photo_share_android.core.domain.MediaReadabilityChecker
 import com.sun.daily_photo_share_android.core.domain.ObserveDevicePhotosUseCase
 import com.sun.daily_photo_share_android.core.domain.PhotoPermissionRepository
 import com.sun.daily_photo_share_android.core.domain.PrepareShareUseCase
+import com.sun.daily_photo_share_android.core.domain.RecordShareHandOffUseCase
+import com.sun.daily_photo_share_android.core.domain.ShareHistoryRepository
 import com.sun.daily_photo_share_android.core.model.MediaPhoto
 import com.sun.daily_photo_share_android.core.model.MediaUri
 import com.sun.daily_photo_share_android.core.model.PhotoPermissionState
+import com.sun.daily_photo_share_android.core.model.ShareRecord
 import com.sun.daily_photo_share_android.core.model.ShareRequest
 import com.sun.daily_photo_share_android.core.model.ShareTarget
 import com.sun.daily_photo_share_android.core.testing.MainDispatcherRule
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -55,18 +61,36 @@ class GalleryViewModelTest {
             readable?.let { allowed -> uris.filter { it in allowed } } ?: uris
     }
 
+    private class RecordingShareHistory(var failWith: Exception? = null) : ShareHistoryRepository {
+        val recorded = mutableListOf<ShareRequest>()
+        var attempts = 0
+
+        override suspend fun recordHandOff(request: ShareRequest, at: Instant) {
+            attempts++
+            failWith?.let { throw it }
+            recorded += request
+        }
+
+        override fun observeLatest(): Flow<ShareRecord?> = flowOf(null)
+    }
+
     private fun viewModel(
         permissions: FakePermissionRepository = FakePermissionRepository(
             PhotoPermissionState.Full,
-            requestable
+            requestable,
         ),
         savedStateHandle: SavedStateHandle = SavedStateHandle(),
         checker: FakeReadabilityChecker = FakeReadabilityChecker(),
+        history: RecordingShareHistory = RecordingShareHistory(),
     ) = GalleryViewModel(
         getPermissionState = GetPhotoPermissionStateUseCase(permissions),
         getRequestablePermissions = GetRequestablePermissionsUseCase(permissions),
         observeDevicePhotos = ObserveDevicePhotosUseCase(EmptyGalleryRepository),
         prepareShare = PrepareShareUseCase(checker),
+        recordShareHandOff = RecordShareHandOffUseCase(
+            history,
+            Clock.fixed(Instant.parse("2026-10-10T08:30:00Z"), ZoneOffset.UTC),
+        ),
         savedStateHandle = savedStateHandle,
     )
 
@@ -143,7 +167,7 @@ class GalleryViewModelTest {
 
         assertEquals(
             listOf(b.value, a.value),
-            handle.get<List<String>>(GalleryViewModel.SELECTION_KEY)
+            handle.get<List<String>>(GalleryViewModel.SELECTION_KEY),
         )
     }
 
@@ -181,7 +205,7 @@ class GalleryViewModelTest {
         assertEquals(
             GalleryEffect.LaunchShare(
                 ShareRequest(listOf(c, a, b), ShareTarget.LINE),
-                skippedCount = 0
+                skippedCount = 0,
             ),
             vm.effects.first(),
         )
@@ -198,7 +222,7 @@ class GalleryViewModelTest {
         assertEquals(
             GalleryEffect.LaunchShare(
                 ShareRequest(listOf(a), ShareTarget.SYSTEM_SHEET),
-                skippedCount = 0
+                skippedCount = 0,
             ),
             vm.effects.first(),
         )
@@ -215,14 +239,14 @@ class GalleryViewModelTest {
         assertEquals(
             GalleryEffect.LaunchShare(
                 ShareRequest(listOf(a, c), ShareTarget.LINE),
-                skippedCount = 1
+                skippedCount = 1,
             ),
             vm.effects.first(),
         )
         assertEquals(listOf(a, c), vm.state.value.selection.items)
         assertEquals(
             listOf(a.value, c.value),
-            handle.get<List<String>>(GalleryViewModel.SELECTION_KEY)
+            handle.get<List<String>>(GalleryViewModel.SELECTION_KEY),
         )
     }
 
@@ -261,7 +285,7 @@ class GalleryViewModelTest {
         assertEquals(
             GalleryEffect.LaunchShare(
                 request.copy(target = ShareTarget.SYSTEM_SHEET),
-                skippedCount = 0
+                skippedCount = 0,
             ),
             vm.effects.first(),
         )
@@ -277,5 +301,32 @@ class GalleryViewModelTest {
 
         assertNull(vm.state.value.shareProblem)
         assertEquals(listOf(a), vm.state.value.selection.items)
+    }
+
+    // --- share history ---
+
+    @Test
+    fun shareHandedOff_recordsTheRequestOnce() {
+        val history = RecordingShareHistory()
+        val vm = viewModel(history = history)
+        val request = ShareRequest(listOf(a), ShareTarget.LINE)
+
+        vm.onIntent(GalleryIntent.ShareHandedOff(request))
+
+        assertEquals(listOf(request), history.recorded)
+        assertEquals(1, history.attempts)
+    }
+
+    @Test
+    fun shareHandedOff_whenTheWriteFails_doesNotCrashOrChangeTheState() = runTest {
+        val history = RecordingShareHistory(failWith = IllegalStateException("disk full"))
+        val vm = viewModel(history = history)
+        val before = vm.state.value
+        val request = ShareRequest(listOf(a), ShareTarget.LINE)
+
+        vm.onIntent(GalleryIntent.ShareHandedOff(request))
+
+        assertEquals(1, history.attempts)
+        assertEquals(before, vm.state.value)
     }
 }

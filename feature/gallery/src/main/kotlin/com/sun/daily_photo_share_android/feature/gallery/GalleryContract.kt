@@ -57,6 +57,10 @@ sealed interface GalleryIntent {
 
     /** Reported by the Route when the share target could not be started. */
     data class ShareTargetUnavailable(val request: ShareRequest) : GalleryIntent
+
+    /** Reported only after Android has successfully launched the share flow. */
+    data class ShareHandedOff(val request: ShareRequest) : GalleryIntent
+
     data object UseSystemShareSheetClicked : GalleryIntent
     data object ShareProblemDismissed : GalleryIntent
 }
