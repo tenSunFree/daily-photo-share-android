@@ -1,6 +1,7 @@
 # daily-photo-share-android
 
 [![Status](https://img.shields.io/badge/Status-Under%20Development-orange)](#roadmap)
+[![Android CI](https://github.com/tenSunFree/daily-photo-share-android/actions/workflows/ci.yml/badge.svg)](https://github.com/tenSunFree/daily-photo-share-android/actions/workflows/ci.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202026.02.01-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Material 3](https://img.shields.io/badge/UI-Material%203-6750A4?logo=materialdesign&logoColor=white)](https://m3.material.io)
@@ -8,7 +9,12 @@
 [![Gradle](https://img.shields.io/badge/Gradle-9.4.1-02303A?logo=gradle&logoColor=white)](https://gradle.org)
 [![minSdk](https://img.shields.io/badge/minSdk-29-3DDC84?logo=android&logoColor=white)](#environment)
 [![targetSdk](https://img.shields.io/badge/targetSdk-37-3DDC84?logo=android&logoColor=white)](#environment)
-[![Android CI](https://github.com/tenSunFree/daily-photo-share-android/actions/workflows/ci.yml/badge.svg)](https://github.com/tenSunFree/daily-photo-share-android/actions/workflows/ci.yml)
+[![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2B%20MVI%20%2B%20Multi--module-4CAF50)](#architecture-decisions)
+[![DI](https://img.shields.io/badge/DI-Hilt%202.60.1-1565C0)](#tech-stack)
+[![Data](https://img.shields.io/badge/Data-Room%202.8.5%20%2B%20Paging%203-009688)](#tech-stack)
+[![Testing](https://img.shields.io/badge/Testing-Unit%20%2B%20Instrumented-FF9800)](#testing)
+[![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/tenSunFree/daily-photo-share-android?labelColor=171717&color=FF570A&label=CodeRabbit+Reviews)](https://coderabbit.ai)
+[![Code style](https://img.shields.io/badge/Code%20style-Kotlin%20official-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/docs/coding-conventions.html)
 
 ---
 
@@ -16,7 +22,7 @@
 
 Production-style Android photo workflow app with CameraX capture, automatic date-based MediaStore organization, full device gallery browsing, cross-source multi-selection, and LINE sharing.
 
-The target stack is Kotlin, Jetpack Compose, MVI / UDF, Clean Architecture, Paging 3, Jetpack Glance widgets, multi-module, automated testing, CI/CD, and observability.
+The target stack is Kotlin, Jetpack Compose, MVI / UDF, Clean Architecture, Paging 3, Room, Jetpack Glance widgets, multi-module, automated testing, CI/CD, and observability.
 
 This project is for learning and technical practice.
 
@@ -29,6 +35,7 @@ This project is for learning and technical practice.
 - **Today screen** — the app's daily workspace: it shows the photos captured *by this app* on the calendar date of the device, the time of the last capture, and the most recent share. "Today" is a screen name, not a reference to the project timeline.
 - **DailyShare album** — photos captured by this app, stored under `Pictures/DailyShare/<yyyy-MM-dd>/`.
 - **Device gallery** — every image on the device that the app has permission to read (camera, screenshots, downloads, chat apps, and so on), including but not limited to the DailyShare album.
+- **Hand-off** — the moment the app successfully launches another app's share flow (LINE or the system share sheet). It is the only share event the app can observe, so it is what the share history records.
 
 ---
 
@@ -52,16 +59,16 @@ Screenshots are added once the capture → organize → share flow is implemente
 - [x] Local unit test and instrumented test scaffolding (JUnit 4, AndroidX Test, Espresso, Compose UI test)
 - [x] Android-focused `.gitignore` (Gradle, Kotlin, IDE, keystores, local config)
 - [x] Navigation shell: single activity, type-safe routes, bottom navigation (Today | Camera | Gallery)
-- [x] Today screen as an MVI / UDF vertical slice (Intent, immutable UiState, Effect, reducer, ViewModel) on sample data, covered by reducer, ViewModel and use case unit tests
+- [x] Today screen as an MVI / UDF vertical slice (Intent, immutable UiState, Effect, reducer, ViewModel), covered by reducer, ViewModel and use case unit tests; the photo count and recent photos are still sample data
 - [x] Gallery screen: MediaStore-backed photo grid with Paging 3 and Coil thumbnails; full / partial (Android 14+) / denied permission states, re-selection of partially shared photos, and a route to app settings after repeated denial
 - [x] Shared test utilities module (`:core:testing`)
 - [x] Cross-source multi-selection in the gallery: long press to start, tap to toggle, numbered share-order badges, selection bar, picker mode when opened from the Today screen, and the ordered selection kept across configuration changes and process recreation
 - [x] Share the selection to LINE or the system share sheet, in selection order: photos are checked for readability first, unreadable ones are skipped and removed from the selection, and the system share sheet is offered when LINE is not installed
+- [x] Share history in Room (`:core:database`): every successful hand-off is stored as `HANDED_OFF`, and the Today screen's "last shared" now comes from real data, updates without a manual refresh, and shows the date when the share was not made today
 - [x] GitHub Actions CI on every pull request and push to `main`: kotlin-stdlib version guard, unit tests, debug build, test reports uploaded on failure
 
 ### Planned
 
-- [ ] Share history in Room, and a Today screen "last shared" backed by real data
 - [ ] Today screen backed by real MediaStore data
 - [ ] Camera capture with CameraX
 - [ ] Automatic date-based organization through MediaStore
@@ -70,7 +77,7 @@ Screenshots are added once the capture → organize → share flow is implemente
 - [ ] System Photo Picker as an alternative when photo access is denied
 - [ ] Keyset (cursor-based) MediaStore pagination, replacing offset paging
 - [ ] Kotlin 2.4 upgrade (AGP, KSP and Compose compiler together), which also unblocks Coil 3.5+
-- [ ] Remaining modules (`:core:data`, `:core:database`, further feature modules), added together with the features that need them
+- [ ] Remaining modules (`:core:data`, further feature modules), added together with the features that need them
 - [ ] Automated testing beyond the current scope (Compose UI, instrumented, MediaStore cursor reading)
 - [ ] Static analysis in CI (Android Lint, ktlint, detekt) and test coverage
 - [ ] Release pipeline (signed builds, Play Console)
@@ -106,6 +113,7 @@ Screenshots are added once the capture → organize → share flow is implemente
 - Select multiple photos across different sources in a single session, with a stable share order
 - Share the selection to LINE through the Android share flow, with the system share sheet as a fallback
 - Share results are recorded as "handed off", never as "delivered"
+- Each hand-off is stored in a local Room database, and the Today screen shows the most recent one
 
 ### Home Screen Widgets
 
@@ -121,6 +129,7 @@ Screenshots are added once the capture → organize → share flow is implemente
 
 - Unit tests for domain logic
 - Unit tests for reducers, ViewModels, and repositories
+- Instrumented tests for Room DAOs
 - Compose UI tests for key screens
 - Instrumented tests for MediaStore and camera-related flows
 
@@ -159,6 +168,8 @@ Screenshots are added once the capture → organize → share flow is implemente
   Paginated MediaStore queries (Paging `3.5.1`; `paging-common` in `:core:domain`, `paging-compose` in `:feature:gallery`)
 - Coil 3  
   Thumbnail loading for local `content://` URIs (Coil `3.4.0`)
+- Room  
+  Local share history (Room `2.8.5`, KSP compiler), implemented in `:core:database`; the schema is exported to `core/database/schemas`
 - Android share Intents  
   `ACTION_SEND` / `ACTION_SEND_MULTIPLE` with `ClipData` and read-URI grants, built in `:core:share`
 - MediaStore + runtime permissions  
@@ -176,8 +187,8 @@ Screenshots are added once the capture → organize → share flow is implemente
 
 - CameraX  
   Camera preview and photo capture
-- Room / DataStore  
-  Share history and preferences
+- DataStore  
+  Preferences
 - Jetpack Glance  
   Home screen widgets
 
@@ -206,6 +217,8 @@ Screenshots are added once the capture → organize → share flow is implemente
 
 Partial photo access (Android 14+) is best tested on an API 34+ emulator. Sharing to LINE needs a device (or a Play Store emulator image) with LINE installed; without LINE the app offers the system share sheet.
 
+To look at the stored share history, run the app and open **View → Tool Windows → App Inspection → Database Inspector**, then browse `daily-share.db` → `share_records`.
+
 ### Command line
 
 ```bash
@@ -213,6 +226,7 @@ Partial photo access (Android 14+) is best tested on an API 34+ emulator. Sharin
 ./gradlew test                      # run all local unit tests
 ./gradlew :core:model:test          # run pure-JVM domain tests only (fast)
 ./gradlew connectedAndroidTest      # run instrumented tests (device or emulator required)
+./gradlew :core:database:connectedDebugAndroidTest   # run the Room DAO tests only (device or emulator required)
 
 # check which kotlin-stdlib version the app resolves (must stay below 2.4, see Architecture Decisions)
 ./gradlew :app:dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib --configuration debugCompileClasspath
@@ -220,7 +234,7 @@ Partial photo access (Android 14+) is best tested on an API 34+ emulator. Sharin
 
 On Windows, use `gradlew.bat` instead of `./gradlew` (PowerShell: `./gradlew` also works).
 
-CI runs the same `test` and `assembleDebug` tasks, so a green local run of `./gradlew test assembleDebug` is expected to pass CI.
+CI runs the same `test` and `assembleDebug` tasks, so a green local run of `./gradlew test assembleDebug` is expected to pass CI. Instrumented tests (such as the Room DAO tests) are not part of CI yet.
 
 ### Local configuration and secrets
 
@@ -232,7 +246,7 @@ The following files are intentionally excluded from version control by `.gitigno
 - `.env` — local environment values
 - `.idea/`, `.gradle/`, `.kotlin/`, `build/` — IDE and build outputs
 
-The Gradle wrapper JAR (`gradle/wrapper/gradle-wrapper.jar`) is kept in the repository on purpose.
+The Gradle wrapper JAR (`gradle/wrapper/gradle-wrapper.jar`) is kept in the repository on purpose. The exported Room schemas in `core/database/schemas/` are kept on purpose too: they are the migration history.
 
 ---
 
@@ -250,6 +264,7 @@ daily-photo-share-android
 │  ├─ model                              # Pure Kotlin/JVM: domain models and rules (no Android)
 │  ├─ domain                             # Pure Kotlin/JVM: repository interfaces and use cases
 │  ├─ media                              # Android library: MediaStore, photo permissions, paging
+│  ├─ database                           # Android library: Room share history (schemas/ holds the exported JSON)
 │  ├─ share                              # Android library: share Intent builder (LINE, system chooser)
 │  ├─ designsystem                       # Android library: tokens, theme, icons, components
 │  └─ testing                            # Pure Kotlin/JVM: shared test utilities
@@ -274,12 +289,13 @@ Module dependency direction:
  ├──► :feature:gallery ─────┬──► :core:domain
  │                           ├──► :core:designsystem
  │                           └──► :core:share ──► :core:model
- └──► :core:media ──────────────► :core:domain   (implements and binds the repository interfaces)
+ ├──► :core:media ──────────────► :core:domain   (implements and binds the repository interfaces)
+ └──► :core:database ───────────► :core:domain   (Room; implements and binds ShareHistoryRepository)
 
 Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testing
 ```
 
-`:core:model`, `:core:domain` and `:core:testing` are plain JVM modules; `:core:share` is a small Android library with no Hilt and no Compose. Feature modules never depend on `:core:media`; `:app` depends on it so its Hilt bindings are part of the app's dependency graph. Only `:feature:gallery` uses `:core:share`. `:core:designsystem` does not depend on the domain modules.
+`:core:model`, `:core:domain` and `:core:testing` are plain JVM modules; `:core:share` is a small Android library with no Hilt and no Compose. Feature modules never depend on `:core:media` or `:core:database`; `:app` depends on both so their Hilt bindings are part of the app's dependency graph. Only `:feature:gallery` uses `:core:share`. `:core:designsystem` does not depend on the domain modules.
 
 ---
 
@@ -293,11 +309,11 @@ Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testin
 - **No shared MVI framework up front.** Intent / State / Effect / Reducer are implemented directly in each feature; common abstractions are extracted only after several features show real duplication.
 - **Retrofit / OkHttp are deferred.** The app is offline-first; a remote layer is added only when cloud features are.
 - **Share status is `HANDED_OFF`, never "success".** The app can only prove it handed the images to another app, not that the message was sent or received.
-- **`:core:domain` has no DI annotations.** Use cases are plain classes constructed in Hilt modules in `:app` (`TodayModule`, `GalleryModule`); the repositories they need are bound by the modules that implement them, such as `:core:media`. The domain layer does not know which DI framework is used.
+- **`:core:domain` has no DI annotations.** Use cases are plain classes constructed in Hilt modules in `:app` (`TodayModule`, `GalleryModule`, `ShareHistoryModule`); the repositories they need are bound by the modules that implement them, such as `:core:media` and `:core:database`. The domain layer does not know which DI framework is used.
 - **Screens are split into Route and Screen.** `XRoute` connects the ViewModel (collect state, forward intents, turn effects into navigation or system actions); `XScreen` is stateless (UiState in, Intent out).
 - **Reload on every resume.** The Today screen re-reads its data whenever it resumes, so it also reflects a changed calendar date without a background timer. The Gallery screen re-checks photo permission on every resume.
 - **Icons go through the design system.** Features use `DailyIcons` and never import an icon library directly, so the icon source can change in one module.
-- **Platform implementations bind themselves.** `:core:media` owns the MediaStore and permission implementations and binds them to the `:core:domain` repository interfaces. Implementations and the Hilt module are `internal`, so no other module can depend on them directly.
+- **Platform implementations bind themselves.** `:core:media` owns the MediaStore and permission implementations and binds them to the `:core:domain` repository interfaces. Implementations and the Hilt module are `internal`, so no other module can depend on them directly. `:core:database` follows the same rule for Room.
 - **Permission-state resolution is pure logic.** Full / partial / denied classification lives in `MediaPermissionResolver`, which takes the API level as a parameter, so every Android 10-14+ branch is covered by plain JVM tests.
 - **Cursor reading and model mapping are separated.** `MediaStoreImageDataSource` reads `Cursor` values and builds the content URI; `MediaStoreMapper` receives plain values and is fully JVM-testable.
 - **Offset keys are direction-aware.** A paging key is the page start for refresh and append, and the page end for prepend. Pages are then always adjacent, so refreshing from any scroll position produces neither gaps nor duplicate grid keys.
@@ -312,6 +328,13 @@ Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testin
 - **LINE is detected by trying, not by querying.** Starting the LINE Intent and catching `ActivityNotFoundException` needs no package-visibility `<queries>` entry, and also covers LINE being installed but disabled. The user is then offered the system share sheet.
 - **Photos are checked for readability before sharing.** A photo can disappear between selecting and sharing (deleted, or removed from partial access). Unreadable photos are dropped, reported with a toast, and removed from the selection instead of failing inside the receiving app. The checker treats any `RuntimeException` as unreadable, so a failing provider can never leave the share buttons disabled.
 - **The selection is kept after sharing.** The app can only confirm the hand-off, not delivery, so it does not clear the selection on the user's behalf.
+- **A hand-off is recorded only after the share flow has launched.** `GalleryRoute` reports `ShareHandedOff` right after `startActivity` returns without `ActivityNotFoundException`, and the ViewModel records it. A failed LINE launch writes nothing; choosing the system share sheet afterwards records one `SYSTEM_SHEET` hand-off. A record means the Android share flow was launched; it does not prove the recipient app sent or delivered the photos, and closing the share sheet without choosing an app still counts.
+- **Share history is a domain contract with a Room implementation.** `ShareHistoryRepository` lives in `:core:domain`; `:core:database` implements and binds it, so the domain layer never sees Room. Recording takes an injected `Clock`, so tests can fix the time.
+- **The share history write is best-effort.** The photos have already been handed off when the record is written, so a failing write is swallowed (cancellation is rethrown) instead of crashing the app. It will be reported once observability exists.
+- **The Today summary is merged in the domain layer.** `GetTodaySummaryUseCase` combines `TodaySummaryRepository` with `ShareHistoryRepository.observeLatest()`, so the ViewModel still talks to a single use case, and a new hand-off reaches the Today screen through the Room `Flow` without a manual refresh. The photo data source never reports a share.
+- **The database stores primitives; mappers translate.** Times are epoch milliseconds and enums are stored by name, so no `TypeConverter` is needed and the schema stays stable while domain types evolve. The mappers are plain functions covered by JVM unit tests, and the DAO ordering (newest by time, then by id) is covered by an instrumented test.
+- **The Room schema is exported and migrations are explicit.** `exportSchema = true` writes the JSON to `core/database/schemas`, which is committed. There is no `fallbackToDestructiveMigration()`: a version bump without a `Migration` fails loudly instead of silently erasing the history.
+- **A share from an earlier day shows its date.** `formatShareTime` shows `HH:mm` for a share made today and `M/d HH:mm` otherwise, so an old share never reads as one made today. It takes the zone as a parameter, so the day boundary is covered by JVM tests.
 - **Dependencies must stay within the Kotlin compiler's metadata range.** The Kotlin 2.2 compiler reads library metadata up to 2.3, so no dependency may pull `kotlin-stdlib` 2.4 or newer (Coil is pinned to 3.4.0 for this reason). CI enforces this on every pull request; locally, check with `dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib`.
 
 ---
@@ -320,7 +343,7 @@ Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testin
 
 This project is created for independent learning and demonstration purposes.
 
-Badges for coverage and monitoring are added to the top of this README when the corresponding pipelines exist.
+Badges for coverage, distribution and monitoring are added to the top of this README when the corresponding pipelines exist.
 
 ---
 

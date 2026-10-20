@@ -4,8 +4,6 @@ import com.sun.daily_photo_share_android.core.domain.TodaySummaryRepository
 import com.sun.daily_photo_share_android.core.model.DailyShareMediaNaming
 import com.sun.daily_photo_share_android.core.model.MediaPhoto
 import com.sun.daily_photo_share_android.core.model.MediaUri
-import com.sun.daily_photo_share_android.core.model.ShareRecord
-import com.sun.daily_photo_share_android.core.model.ShareTarget
 import com.sun.daily_photo_share_android.core.model.TodaySummary
 import java.time.LocalDate
 import java.time.ZoneId
@@ -16,6 +14,9 @@ import kotlinx.coroutines.flow.flowOf
 /**
  * In-memory data used to exercise the Today screen without MediaStore.
  * A MediaStore-backed repository replaces it; the numbers shown are not real.
+ *
+ * It never reports a last share: that comes from the share history in Room,
+ * which GetTodaySummaryUseCase merges into the summary.
  */
 class SampleTodaySummaryRepository @Inject constructor() : TodaySummaryRepository {
 
@@ -33,12 +34,7 @@ class SampleTodaySummaryRepository @Inject constructor() : TodaySummaryRepositor
             photoCount = 23,
             recentPhotos = photos,
             lastCapturedAt = photos.first().takenAt,
-            lastShare = ShareRecord(
-                id = 1,
-                handedOffAt = date.atTime(10, 31).atZone(ZoneId.systemDefault()).toInstant(),
-                photoCount = 8,
-                target = ShareTarget.LINE,
-            ),
+            lastShare = null,
         )
     }
 

@@ -32,6 +32,7 @@ import com.sun.daily_photo_share_android.core.model.ShareRecord
 import com.sun.daily_photo_share_android.core.model.ShareTarget
 import com.sun.daily_photo_share_android.core.model.TodaySummary
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -103,7 +104,7 @@ private fun TodayContent(
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = lastShareText(summary.lastShare),
+                text = lastShareText(summary.lastShare, summary.date),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(DailyTheme.spacing.md),
             )
@@ -125,12 +126,21 @@ private fun TodayContent(
 }
 
 @Composable
-private fun lastShareText(lastShare: ShareRecord?): String {
+private fun lastShareText(lastShare: ShareRecord?, today: LocalDate): String {
     if (lastShare == null) return stringResource(R.string.today_no_share)
-    val time = formatTime(lastShare.handedOffAt)
+    val time = formatShareTime(lastShare.handedOffAt, today)
     return when (lastShare.target) {
-        ShareTarget.LINE -> stringResource(R.string.today_last_share_line, time, lastShare.photoCount)
-        ShareTarget.SYSTEM_SHEET -> stringResource(R.string.today_last_share_other, time, lastShare.photoCount)
+        ShareTarget.LINE -> stringResource(
+            R.string.today_last_share_line,
+            time,
+            lastShare.photoCount
+        )
+
+        ShareTarget.SYSTEM_SHEET -> stringResource(
+            R.string.today_last_share_other,
+            time,
+            lastShare.photoCount
+        )
     }
 }
 
@@ -179,7 +189,10 @@ private fun ErrorContent(onRetry: () -> Unit, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxSize()
             .padding(DailyTheme.spacing.md),
-        verticalArrangement = Arrangement.spacedBy(DailyTheme.spacing.md, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(
+            DailyTheme.spacing.md,
+            Alignment.CenterVertically
+        ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(

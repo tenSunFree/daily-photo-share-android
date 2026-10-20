@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -32,6 +33,7 @@ fun GalleryRoute(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val photos = viewModel.photos.collectAsLazyPagingItems()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Idempotent, so re-sending after a configuration change or process death is harmless.
@@ -75,19 +77,21 @@ fun GalleryRoute(
                         if (effect.skippedCount > 0) {
                             Toast.makeText(
                                 context,
-                                context.getString(
+                                resources.getString(
                                     R.string.gallery_share_skipped,
-                                    effect.skippedCount
+                                    effect.skippedCount,
                                 ),
                                 Toast.LENGTH_SHORT,
                             ).show()
                         }
                         val intent = ShareIntents.create(
                             request = effect.request,
-                            chooserTitle = context.getString(R.string.gallery_share_chooser_title),
+                            chooserTitle = resources.getString(R.string.gallery_share_chooser_title),
                         )
                         try {
                             context.startActivity(intent)
+                            // Only a successful launch counts as a hand-off.
+                            viewModel.onIntent(GalleryIntent.ShareHandedOff(effect.request))
                         } catch (e: ActivityNotFoundException) {
                             // LINE is missing or disabled; the screen offers the system share sheet.
                             viewModel.onIntent(GalleryIntent.ShareTargetUnavailable(effect.request))

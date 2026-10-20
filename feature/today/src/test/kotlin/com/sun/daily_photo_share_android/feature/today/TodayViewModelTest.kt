@@ -2,9 +2,13 @@ package com.sun.daily_photo_share_android.feature.today
 
 import com.sun.daily_photo_share_android.core.domain.DateProvider
 import com.sun.daily_photo_share_android.core.domain.GetTodaySummaryUseCase
+import com.sun.daily_photo_share_android.core.domain.ShareHistoryRepository
 import com.sun.daily_photo_share_android.core.domain.TodaySummaryRepository
+import com.sun.daily_photo_share_android.core.model.ShareRecord
+import com.sun.daily_photo_share_android.core.model.ShareRequest
 import com.sun.daily_photo_share_android.core.model.TodaySummary
 import java.io.IOException
+import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -35,10 +39,21 @@ class TodayViewModelTest {
         override fun observeSummary(date: LocalDate): Flow<TodaySummary> = source(date)
     }
 
+    private class FakeShareHistoryRepository : ShareHistoryRepository {
+        override suspend fun recordHandOff(request: ShareRequest, at: Instant) = Unit
+        override fun observeLatest(): Flow<ShareRecord?> = flowOf(null)
+    }
+
     private fun viewModel(
         dateProvider: DateProvider = DateProvider { date },
         source: (LocalDate) -> Flow<TodaySummary>,
-    ) = TodayViewModel(GetTodaySummaryUseCase(FakeRepository(source), dateProvider))
+    ) = TodayViewModel(
+        GetTodaySummaryUseCase(
+            repository = FakeRepository(source),
+            shareHistoryRepository = FakeShareHistoryRepository(),
+            dateProvider = dateProvider,
+        ),
+    )
 
     @Test
     fun initialState_isLoading_andNothingIsLoadedBeforeAnIntent() {

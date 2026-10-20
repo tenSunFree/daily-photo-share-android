@@ -24,12 +24,13 @@ dependencyResolutionManagement {
 
 rootProject.name = "daily-photo-share-android"
 include(":app")
-include(":core:model")
 include(":core:designsystem")
 include(":core:domain")
+include(":core:database")
 include(":core:testing")
 include(":core:media")
+include(":core:model")
 include(":core:share")
-include(":feature:today")
 include(":feature:gallery")
+include(":feature:today")
  
