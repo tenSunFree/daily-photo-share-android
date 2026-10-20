@@ -31,6 +31,7 @@ include(":core:testing")
 include(":core:media")
 include(":core:model")
 include(":core:share")
+include(":feature:camera")
 include(":feature:gallery")
 include(":feature:today")
  

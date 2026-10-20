@@ -41,6 +41,7 @@ dependencies {
     implementation(project(":core:database"))
     implementation(project(":core:media"))
     implementation(project(":core:designsystem"))
+    implementation(project(":feature:camera"))
     implementation(project(":feature:today"))
     implementation(project(":feature:gallery"))
     implementation(libs.androidx.activity.compose)
