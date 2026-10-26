@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="camera_back">返回</string>
+    <string name="camera_shutter">拍照</string>
+    <string name="camera_saved_count">已拍攝 %1$d 張</string>
+    <string name="camera_unavailable">無法啟動相機</string>
+    <string name="camera_capture_failed">拍照失敗,請再試一次。</string>
+    <string name="camera_permission_title">需要相機權限</string>
+    <string name="camera_permission_description">Daily Photo Share 需要相機權限才能拍照。</string>
+    <string name="camera_permission_allow">允許相機</string>
+    <string name="camera_settings_title">請開啟相機權限</string>
+    <string name="camera_settings_description">系統無法再次詢問相機權限,請到 App 設定開啟。</string>
+    <string name="camera_open_settings">開啟設定</string>
+</resources>
