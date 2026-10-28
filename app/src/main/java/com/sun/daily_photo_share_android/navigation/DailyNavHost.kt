@@ -9,6 +9,8 @@ import com.sun.daily_photo_share_android.feature.gallery.GalleryDestination
 import com.sun.daily_photo_share_android.feature.gallery.galleryScreen
 import com.sun.daily_photo_share_android.feature.today.TodayDestination
 import com.sun.daily_photo_share_android.feature.today.todayScreen
+import com.sun.daily_photo_share_android.feature.camera.CameraDestination
+import com.sun.daily_photo_share_android.feature.camera.cameraScreen
 
 @Composable
 internal fun DailyNavHost(
@@ -33,8 +35,6 @@ internal fun DailyNavHost(
 
         galleryScreen()
 
-        composable<CameraDestination> {
-            PlaceholderScreen(title = "Camera")
-        }
+        cameraScreen(onBack = { navController.popBackStack() })
     }
 }

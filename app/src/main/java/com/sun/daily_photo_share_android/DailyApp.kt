@@ -7,7 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sun.daily_photo_share_android.feature.today.TodayDestination
-import com.sun.daily_photo_share_android.navigation.CameraDestination
+import com.sun.daily_photo_share_android.feature.camera.CameraDestination
 import com.sun.daily_photo_share_android.navigation.DailyBottomBar
 import com.sun.daily_photo_share_android.navigation.DailyNavHost
 import com.sun.daily_photo_share_android.feature.gallery.GalleryDestination
