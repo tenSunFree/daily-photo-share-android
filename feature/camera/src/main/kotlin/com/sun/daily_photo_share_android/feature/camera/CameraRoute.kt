@@ -6,7 +6,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.provider.Settings
+import android.util.Log
 import android.view.Surface
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -18,12 +20,12 @@ import androidx.camera.core.SurfaceRequest
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
@@ -37,6 +39,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
+
+private const val TAG = "CameraRoute"
 
 @Composable
 fun CameraRoute(
@@ -84,13 +88,28 @@ fun CameraRoute(
         )
     }
 
-    // PreviewView is not used, so keep the use cases' rotation in sync ourselves.
-    val configuration = LocalConfiguration.current
+    // PreviewView is not used, so keep the use cases' rotation in sync ourselves. A 180-degree
+    // turn does not change the Configuration, so listen to the display itself.
     val view = LocalView.current
-    LaunchedEffect(configuration) {
-        val rotation = view.display?.rotation ?: Surface.ROTATION_0
-        preview.targetRotation = rotation
-        imageCapture.targetRotation = rotation
+    DisposableEffect(view) {
+        val displayManager = context.getSystemService(DisplayManager::class.java)
+            ?: return@DisposableEffect onDispose {}
+
+        fun updateRotation() {
+            val rotation = view.display?.rotation ?: Surface.ROTATION_0
+            preview.targetRotation = rotation
+            imageCapture.targetRotation = rotation
+        }
+
+        val listener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) = Unit
+            override fun onDisplayRemoved(displayId: Int) = Unit
+            override fun onDisplayChanged(displayId: Int) = updateRotation()
+        }
+
+        updateRotation()
+        displayManager.registerDisplayListener(listener, null)
+        onDispose { displayManager.unregisterDisplayListener(listener) }
     }
 
     // Bind while permission is granted; the lifecycle owner opens and closes the camera.
@@ -107,6 +126,7 @@ fun CameraRoute(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            Log.e(TAG, "Camera provider initialization failed", e)
             viewModel.onIntent(CameraIntent.CameraUnavailable)
             return@LaunchedEffect
         }
@@ -132,6 +152,7 @@ fun CameraRoute(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            Log.e(TAG, "Binding the camera use cases failed", e)
             viewModel.onIntent(CameraIntent.CameraUnavailable)
         } finally {
             provider.unbind(preview, imageCapture)
