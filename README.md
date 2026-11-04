@@ -12,6 +12,7 @@
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2B%20MVI%20%2B%20Multi--module-4CAF50)](#architecture-decisions)
 [![DI](https://img.shields.io/badge/DI-Hilt%202.60.1-1565C0)](#tech-stack)
 [![Data](https://img.shields.io/badge/Data-Room%202.8.5%20%2B%20Paging%203-009688)](#tech-stack)
+[![Camera](https://img.shields.io/badge/Camera-CameraX%201.6.2-34A853?logo=android&logoColor=white)](#tech-stack)
 [![Testing](https://img.shields.io/badge/Testing-Unit%20%2B%20Instrumented-FF9800)](#testing)
 [![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/tenSunFree/daily-photo-share-android?labelColor=171717&color=FF570A&label=CodeRabbit+Reviews)](https://coderabbit.ai)
 [![Code style](https://img.shields.io/badge/Code%20style-Kotlin%20official-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/docs/coding-conventions.html)
@@ -58,20 +59,19 @@ Screenshots are added once the capture → organize → share flow is implemente
 - [x] Gradle daemon JVM toolchain pinned to JDK 21 via `gradle/gradle-daemon-jvm.properties`
 - [x] Local unit test and instrumented test scaffolding (JUnit 4, AndroidX Test, Espresso, Compose UI test)
 - [x] Android-focused `.gitignore` (Gradle, Kotlin, IDE, keystores, local config)
-- [x] Navigation shell: single activity, type-safe routes, bottom navigation (Today | Camera | Gallery)
+- [x] Navigation shell: single activity, type-safe routes, bottom navigation (Today | Camera | Gallery); Camera is an action that opens a full-screen camera without the bottom bar
 - [x] Today screen as an MVI / UDF vertical slice (Intent, immutable UiState, Effect, reducer, ViewModel), covered by reducer, ViewModel and use case unit tests; the photo count and recent photos are still sample data
 - [x] Gallery screen: MediaStore-backed photo grid with Paging 3 and Coil thumbnails; full / partial (Android 14+) / denied permission states, re-selection of partially shared photos, and a route to app settings after repeated denial
 - [x] Shared test utilities module (`:core:testing`)
 - [x] Cross-source multi-selection in the gallery: long press to start, tap to toggle, numbered share-order badges, selection bar, picker mode when opened from the Today screen, and the ordered selection kept across configuration changes and process recreation
 - [x] Share the selection to LINE or the system share sheet, in selection order: photos are checked for readability first, unreadable ones are skipped and removed from the selection, and the system share sheet is offered when LINE is not installed
 - [x] Share history in Room (`:core:database`): every successful hand-off is stored as `HANDED_OFF`, and the Today screen's "last shared" now comes from real data, updates without a manual refresh, and shows the date when the share was not made today
+- [x] Camera capture with CameraX (`:feature:camera`): Compose preview, shutter, camera permission states (including a route to app settings), and photos written straight into MediaStore under `Pictures/DailyShare/<yyyy-MM-dd>/` using the device's local date at the moment of capture, so a photo taken after midnight lands in the new day's folder; new photos appear in the gallery without a manual refresh
 - [x] GitHub Actions CI on every pull request and push to `main`: kotlin-stdlib version guard, unit tests, debug build, test reports uploaded on failure
 
 ### Planned
 
 - [ ] Today screen backed by real MediaStore data
-- [ ] Camera capture with CameraX
-- [ ] Automatic date-based organization through MediaStore
 - [ ] Album mode, date section headers, and full-screen photo preview
 - [ ] Jetpack Glance home screen widgets
 - [ ] System Photo Picker as an alternative when photo access is denied
@@ -93,7 +93,8 @@ Screenshots are added once the capture → organize → share flow is implemente
 
 - Capture photos in-app with CameraX
 - Save captured photos directly into MediaStore
-- Runtime camera permission handling with clear denied / permanently denied states
+- Runtime camera permission handling with clear states: can ask, and "open settings" once the system no longer shows the prompt
+- Back camera by default, with the front camera as a fallback on devices that have no back camera
 
 ### Date-Based Organization
 
@@ -168,6 +169,8 @@ Screenshots are added once the capture → organize → share flow is implemente
   Paginated MediaStore queries (Paging `3.5.1`; `paging-common` in `:core:domain`, `paging-compose` in `:feature:gallery`)
 - Coil 3  
   Thumbnail loading for local `content://` URIs (Coil `3.4.0`)
+- CameraX  
+  Camera preview and photo capture (CameraX `1.6.2`: `camera-core`, `camera-camera2`, `camera-lifecycle` and `camera-compose` with `CameraXViewfinder`), used inside `:feature:camera`
 - Room  
   Local share history (Room `2.8.5`, KSP compiler), implemented in `:core:database`; the schema is exported to `core/database/schemas`
 - Android share Intents  
@@ -185,8 +188,6 @@ Screenshots are added once the capture → organize → share flow is implemente
 
 ### Planned
 
-- CameraX  
-  Camera preview and photo capture
 - DataStore  
   Preferences
 - Jetpack Glance  
@@ -216,6 +217,8 @@ Screenshots are added once the capture → organize → share flow is implemente
 4. Select the `app` run configuration and run it on an emulator or a physical device
 
 Partial photo access (Android 14+) is best tested on an API 34+ emulator. Sharing to LINE needs a device (or a Play Store emulator image) with LINE installed; without LINE the app offers the system share sheet.
+
+The camera needs a device or an emulator with a camera (the Pixel emulator's virtual scene works). After taking a photo, look for it under `Pictures/DailyShare/<today>/` in the Files or Photos app, or open the Gallery tab.
 
 To look at the stored share history, run the app and open **View → Tool Windows → App Inspection → Database Inspector**, then browse `daily-share.db` → `share_records`.
 
@@ -269,6 +272,7 @@ daily-photo-share-android
 │  ├─ designsystem                       # Android library: tokens, theme, icons, components
 │  └─ testing                            # Pure Kotlin/JVM: shared test utilities
 ├─ feature
+│  ├─ camera                             # Camera screen: CameraX preview and capture, camera permission, MVI contract, ViewModel
 │  ├─ today                              # Today screen: MVI contract, reducer, ViewModel, UI
 │  └─ gallery                            # Gallery screen: permissions, photo grid, multi-selection, sharing
 ├─ gradle
@@ -286,16 +290,19 @@ Module dependency direction:
 ```text
 :app ──► :feature:today ────┬──► :core:domain ──► :core:model
  │                           └──► :core:designsystem
+ ├──► :feature:camera ──────┬──► :core:domain
+ │                           ├──► :core:model
+ │                           └──► :core:designsystem
  ├──► :feature:gallery ─────┬──► :core:domain
  │                           ├──► :core:designsystem
  │                           └──► :core:share ──► :core:model
  ├──► :core:media ──────────────► :core:domain   (implements and binds the repository interfaces)
  └──► :core:database ───────────► :core:domain   (Room; implements and binds ShareHistoryRepository)
 
-Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testing
+Test scope: :feature:today, :feature:gallery, :feature:camera, :core:media ──► :core:testing
 ```
 
-`:core:model`, `:core:domain` and `:core:testing` are plain JVM modules; `:core:share` is a small Android library with no Hilt and no Compose. Feature modules never depend on `:core:media` or `:core:database`; `:app` depends on both so their Hilt bindings are part of the app's dependency graph. Only `:feature:gallery` uses `:core:share`. `:core:designsystem` does not depend on the domain modules.
+`:core:model`, `:core:domain` and `:core:testing` are plain JVM modules; `:core:share` is a small Android library with no Hilt and no Compose. Feature modules never depend on `:core:media` or `:core:database`; `:app` depends on both so their Hilt bindings are part of the app's dependency graph. Only `:feature:gallery` uses `:core:share`. Only `:feature:camera` uses CameraX. `:core:designsystem` does not depend on the domain modules.
 
 ---
 
@@ -309,7 +316,7 @@ Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testin
 - **No shared MVI framework up front.** Intent / State / Effect / Reducer are implemented directly in each feature; common abstractions are extracted only after several features show real duplication.
 - **Retrofit / OkHttp are deferred.** The app is offline-first; a remote layer is added only when cloud features are.
 - **Share status is `HANDED_OFF`, never "success".** The app can only prove it handed the images to another app, not that the message was sent or received.
-- **`:core:domain` has no DI annotations.** Use cases are plain classes constructed in Hilt modules in `:app` (`TodayModule`, `GalleryModule`, `ShareHistoryModule`); the repositories they need are bound by the modules that implement them, such as `:core:media` and `:core:database`. The domain layer does not know which DI framework is used.
+- **`:core:domain` has no DI annotations.** Use cases are plain classes constructed in Hilt modules in `:app` (`TodayModule`, `GalleryModule`, `CameraModule`, `ShareHistoryModule`; `TimeModule` provides the shared `Clock`); the repositories they need are bound by the modules that implement them, such as `:core:media` and `:core:database`. The domain layer does not know which DI framework is used.
 - **Screens are split into Route and Screen.** `XRoute` connects the ViewModel (collect state, forward intents, turn effects into navigation or system actions); `XScreen` is stateless (UiState in, Intent out).
 - **Reload on every resume.** The Today screen re-reads its data whenever it resumes, so it also reflects a changed calendar date without a background timer. The Gallery screen re-checks photo permission on every resume.
 - **Icons go through the design system.** Features use `DailyIcons` and never import an icon library directly, so the icon source can change in one module.
@@ -335,6 +342,12 @@ Test scope: :feature:today, :feature:gallery, :core:media ──► :core:testin
 - **The database stores primitives; mappers translate.** Times are epoch milliseconds and enums are stored by name, so no `TypeConverter` is needed and the schema stays stable while domain types evolve. The mappers are plain functions covered by JVM unit tests, and the DAO ordering (newest by time, then by id) is covered by an instrumented test.
 - **The Room schema is exported and migrations are explicit.** `exportSchema = true` writes the JSON to `core/database/schemas`, which is committed. There is no `fallbackToDestructiveMigration()`: a version bump without a `Migration` fails loudly instead of silently erasing the history.
 - **A share from an earlier day shows its date.** `formatShareTime` shows `HH:mm` for a share made today and `M/d HH:mm` otherwise, so an old share never reads as one made today. It takes the zone as a parameter, so the day boundary is covered by JVM tests.
+- **Camera is an action, not a tab.** The Camera destination opens full-screen with the bottom bar hidden, so the bottom bar never shows it as selected. Its destination lives in `:feature:camera` together with the screen.
+- **The capture target is decided in the domain layer.** `PrepareCaptureUseCase` turns the current time into a file name, a folder and a capture time using the existing `DailyShareMediaNaming`, so there is a single set of naming rules and the cross-midnight case is covered by a JVM test with an injected `Clock`.
+- **CameraX writes straight into MediaStore.** `ImageCapture` takes the MediaStore `ContentValues` (`RELATIVE_PATH`, `DATE_TAKEN`), so no intermediate file is created and no storage permission is needed for photos the app creates itself. Only `CAMERA` is requested, and it is declared in the feature's own manifest with `camera.any` as not required, so devices without a camera can still install the app.
+- **Camera permission has no "permanently denied" state.** Android does not expose one, so the permission is `Granted`, `Requestable`, or `NeedsSettings`. `NeedsSettings` means the app has asked before and the system will no longer show the prompt; whether it has asked is kept in `SavedStateHandle`, and the permission is re-checked on every resume so enabling it in Settings restores the preview.
+- **The Route runs CameraX; the ViewModel decides.** The ViewModel emits a `CapturePhoto` effect with the target and ignores taps while the camera is not ready or a capture is running; `CameraRoute` binds the camera to the lifecycle, takes the picture and reports success or failure back as an intent. CameraX stays inside `:feature:camera` until a second module needs it, so there is no `:core:camera` yet.
+- **The gallery needs no refresh hook for new photos.** It already observes MediaStore through a `ContentObserver`, so a photo written by the camera invalidates the paging source by itself.
 - **Dependencies must stay within the Kotlin compiler's metadata range.** The Kotlin 2.2 compiler reads library metadata up to 2.3, so no dependency may pull `kotlin-stdlib` 2.4 or newer (Coil is pinned to 3.4.0 for this reason). CI enforces this on every pull request; locally, check with `dependencyInsight --dependency org.jetbrains.kotlin:kotlin-stdlib`.
 
 ---

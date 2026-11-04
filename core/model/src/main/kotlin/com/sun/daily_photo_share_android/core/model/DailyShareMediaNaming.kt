@@ -6,8 +6,10 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
 /**
- * "Path and filename rules" for DailyShare photos. Pure naming logic; does not interact with MediaStore.
- * The actual write operation (using ContentResolver / RELATIVE_PATH) is handled in `:core:media`.
+ * Path and filename rules for DailyShare photos.
+ *
+ * Pure naming logic only; this object does not access MediaStore.
+ * The platform capture boundary writes the generated path and filename into MediaStore.
  */
 object DailyShareMediaNaming {
 

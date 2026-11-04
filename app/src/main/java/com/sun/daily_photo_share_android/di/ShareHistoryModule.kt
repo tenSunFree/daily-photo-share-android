@@ -14,9 +14,6 @@ import java.time.Clock
 object ShareHistoryModule {
 
     @Provides
-    fun provideClock(): Clock = Clock.systemDefaultZone()
-
-    @Provides
     fun provideRecordShareHandOffUseCase(
         repository: ShareHistoryRepository,
         clock: Clock,
